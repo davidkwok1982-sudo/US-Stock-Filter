@@ -84,8 +84,17 @@ def stock(symbol: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-# Serve Vite build for non-/api routes (Render single-service / local all-in-one image).
+# Serve Vite build for non-/api routes (FastAPI Cloud / Render / local all-in-one).
+# Prefer dist/ next to the Python deploy root (backend/dist); fall back to static/ (Docker).
 # Mount AFTER API routes so /api/* keeps FastAPI handlers. Missing dir = API-only (compose).
-_STATIC_DIR = Path(os.environ.get("KAI_LUT_STATIC", Path(__file__).resolve().parents[1] / "static"))
+_backend_root = Path(__file__).resolve().parents[1]
+_default_static = _backend_root / "dist"
+if not _default_static.is_dir():
+    _default_static = _backend_root / "static"
+_STATIC_DIR = Path(os.environ.get("KAI_LUT_STATIC", str(_default_static)))
 if _STATIC_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="static")
+    # Prefer FastAPI app.frontend() when available; otherwise StaticFiles (older pins / Docker).
+    if hasattr(app, "frontend"):
+        app.frontend("/", directory=str(_STATIC_DIR), fallback="index.html")
+    else:
+        app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="static")

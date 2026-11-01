@@ -1,0 +1,2 @@
+# Upload Vite build even though dist/ is gitignored
+!dist/
