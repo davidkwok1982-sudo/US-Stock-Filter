@@ -1,0 +1,238 @@
+"""Turn one symbol's bars and quote into a Stage 2 row."""
+
+from __future__ import annotations
+
+from app.labels import group_labels, industry_zh, sector_zh
+from app.metrics import (
+    BETA_MIN_OBS,
+    HIGH_DAYS,
+    MICRO_CAP,
+    MIN_BETA,
+    MIN_DOLLAR_VOLUME,
+    MIN_MARKET_CAP,
+    NEAR_HIGH_WITHIN,
+    PENNY_PRICE,
+    RS_DAYS_3M,
+    RS_DAYS_6M,
+    SMA_FAST,
+    SMA_SLOW,
+    average_dollar,
+    beta_vs,
+    build_score,
+    is_otc,
+    rolling_sma,
+    sma_slope,
+    window_return,
+)
+
+FAILS = {
+    "sma200": "低於200天線或數據不足",
+    "cap": "市值不足20億美元或未明",
+    "liquidity": "日均成交額低於3,000萬美元",
+    "beta": "貝他低於1",
+    "beta_missing": "貝他未明",
+    "otc": "場外交易",
+    "type": "非普通股",
+}
+
+
+def _closes(bars: list[dict]) -> dict[str, float]:
+    return {bar["time"]: bar["close"] for bar in bars}
+
+
+def evaluate(
+    base: dict,
+    bars: list[dict] | None,
+    quote: dict | None,
+    spy_bars: list[dict],
+    vendor_beta: float | None = None,
+) -> dict:
+    quote = quote or {}
+    bars = bars or []
+    closes = [bar["close"] for bar in bars]
+    last_close = closes[-1] if closes else None
+    price = quote.get("price") or last_close
+    if price and last_close and last_close > 0 and abs(price - last_close) / last_close > 0.25:
+        price = last_close
+
+    sma50_series = rolling_sma(closes, SMA_FAST) if closes else []
+    sma200_series = rolling_sma(closes, SMA_SLOW) if closes else []
+    sma50 = sma50_series[-1] if sma50_series else None
+    sma200 = sma200_series[-1] if sma200_series else None
+    slope50 = sma_slope(sma50_series) if sma50_series else None
+    slope200 = sma_slope(sma200_series) if sma200_series else None
+
+    high_window = bars[-HIGH_DAYS:] if bars else []
+    high52 = max((bar["high"] for bar in high_window), default=None)
+    low52 = min((bar["low"] for bar in high_window), default=None)
+
+    dollar = average_dollar(bars) if bars else None
+    dollar_basis = "63d" if dollar is not None else None
+    avg_volume = quote.get("avgVolume3m")
+    if dollar is None and price and avg_volume:
+        dollar = price * avg_volume
+        dollar_basis = "quote3m"
+
+    spy_closes = _closes(spy_bars)
+    spy_dates = [bar["time"] for bar in spy_bars]
+    stock_closes = _closes(bars)
+    beta = None
+    beta_basis = None
+    if vendor_beta is not None and abs(vendor_beta) <= 8:
+        beta = round(float(vendor_beta), 2)
+        beta_basis = "yahoo"
+    elif stock_closes and spy_closes:
+        estimated = beta_vs(stock_closes, spy_closes)
+        if estimated is not None:
+            beta = round(estimated, 2)
+            beta_basis = "90d-spy"
+    ret3 = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_3M) if stock_closes else None
+    ret6 = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_6M) if stock_closes else None
+    spy_ret3 = window_return(spy_closes, spy_dates, RS_DAYS_3M) if spy_closes else None
+    spy_ret6 = window_return(spy_closes, spy_dates, RS_DAYS_6M) if spy_closes else None
+    rs3 = ret3 - spy_ret3 if ret3 is not None and spy_ret3 is not None else None
+    rs6 = ret6 - spy_ret6 if ret6 is not None and spy_ret6 is not None else None
+
+    change = quote.get("changePct")
+    if change is None and price and len(closes) >= 2 and closes[-2] > 0:
+        change = price / closes[-2] - 1
+
+    distance200 = price / sma200 - 1 if price and sma200 else None
+    distance50 = price / sma50 - 1 if price and sma50 else None
+    drawdown = None
+    if price and high52:
+        drawdown = price / high52 - 1
+
+    exchange = quote.get("exchange")
+    exchange_name = quote.get("exchangeName")
+    otc = is_otc(exchange, exchange_name)
+    quote_type = quote.get("quoteType")
+    sector_en = base.get("sector")
+    industry_en = base.get("industry")
+
+    fail_codes: list[str] = []
+    if not (price and sma200 and price > sma200):
+        fail_codes.append("sma200")
+    market_cap = quote.get("marketCap")
+    if market_cap is None or market_cap < MIN_MARKET_CAP:
+        fail_codes.append("cap")
+    if dollar is None or dollar < MIN_DOLLAR_VOLUME:
+        fail_codes.append("liquidity")
+    if beta is None:
+        fail_codes.append("beta_missing")
+    elif beta < MIN_BETA:
+        fail_codes.append("beta")
+    if otc:
+        fail_codes.append("otc")
+    if quote_type and quote_type != "EQUITY":
+        fail_codes.append("type")
+
+    micro = bool(
+        otc
+        or (market_cap is not None and market_cap < MICRO_CAP)
+        or (price is not None and price < PENNY_PRICE)
+    )
+    above50 = bool(price and sma50 and price > sma50)
+    above200 = bool(price and sma200 and price > sma200)
+    slope_up = bool(slope50 is not None and slope50 > 0 and slope200 is not None and slope200 > 0)
+    near_high = bool(drawdown is not None and drawdown >= -NEAR_HIGH_WITHIN)
+    score, parts = build_score(
+        distance200=distance200,
+        above50=above50,
+        slope50=slope50,
+        slope200=slope200,
+        drawdown=drawdown,
+        rs6=rs6,
+        dollar=dollar,
+        beta=beta,
+    )
+    groups = list(base.get("groups") or [])
+    name = quote.get("name") or base.get("name") or base.get("symbol")
+    incomplete = len(bars) < SMA_SLOW or sma200 is None or beta is None and len(spy_bars) < BETA_MIN_OBS
+
+    return {
+        "symbol": base["symbol"],
+        "name": name,
+        "exchange": exchange_name or exchange,
+        "groups": groups,
+        "groupLabels": group_labels(groups),
+        "sector": sector_zh(sector_en),
+        "sectorEn": sector_en,
+        "industry": industry_zh(industry_en),
+        "industryEn": industry_en,
+        "price": _round(price),
+        "changePct": change,
+        "marketCap": market_cap,
+        "dollarVolume": dollar,
+        "dollarVolumeBasis": dollar_basis,
+        "vsSma200": distance200,
+        "vsSma50": distance50,
+        "sma50": _round(sma50),
+        "sma200": _round(sma200),
+        "sma50Slope": slope50,
+        "sma200Slope": slope200,
+        "aboveSma50": above50,
+        "aboveSma200": above200,
+        "slopeUp": slope_up,
+        "high52": _round(high52),
+        "low52": _round(low52),
+        "pctFromHigh": drawdown,
+        "nearHigh": near_high,
+        "beta": beta,
+        "betaBasis": beta_basis,
+        "ret3m": ret3,
+        "ret6m": ret6,
+        "rs3m": rs3,
+        "rs6m": rs6,
+        "rsBeat": bool(rs6 is not None and rs6 > 0),
+        "pe": quote.get("pe"),
+        "score": score,
+        "scoreParts": parts,
+        "passHard": not fail_codes,
+        "failReasons": [FAILS[code] for code in fail_codes],
+        "failCodes": fail_codes,
+        "microOrOtc": micro,
+        "otc": otc,
+        "incomplete": incomplete,
+        "barsCount": len(bars),
+    }
+
+
+def _round(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round(value, 4 if abs(value) < 1 else 2)
+
+
+def spy_snapshot(spy_bars: list[dict]) -> dict:
+    closes = _closes(spy_bars)
+    dates = [bar["time"] for bar in spy_bars]
+    price = spy_bars[-1]["close"] if spy_bars else None
+    return {
+        "symbol": "SPY",
+        "price": _round(price),
+        "marketDate": spy_bars[-1]["time"] if spy_bars else None,
+        "ret3m": window_return(closes, dates, RS_DAYS_3M),
+        "ret6m": window_return(closes, dates, RS_DAYS_6M),
+    }
+
+
+def summarize(rows: list[dict]) -> dict:
+    def has(code: str) -> int:
+        return sum(1 for row in rows if code in row["failCodes"])
+
+    passed = [row for row in rows if row["passHard"]]
+    return {
+        "universe": len(rows),
+        "pass": len(passed),
+        "incomplete": sum(1 for row in rows if row["incomplete"]),
+        "failSma200": has("sma200"),
+        "failCap": has("cap"),
+        "failLiquidity": has("liquidity"),
+        "failBeta": has("beta") + has("beta_missing"),
+        "failBetaLow": has("beta"),
+        "failBetaMissing": has("beta_missing"),
+        "failOtc": has("otc"),
+        "failType": has("type"),
+        "microOrOtc": sum(1 for row in rows if row["microOrOtc"]),
+    }

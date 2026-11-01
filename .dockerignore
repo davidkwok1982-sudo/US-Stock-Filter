@@ -1,0 +1,16 @@
+.git
+.venv
+**/__pycache__
+**/.pytest_cache
+**/node_modules
+**/dist
+**/.vite
+backend/cache
+**/*.sqlite
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/.DS_Store
+*.md
+!DEPLOY.md
+.env
+.env.*

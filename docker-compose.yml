@@ -1,0 +1,20 @@
+services:
+  api:
+    build: ./backend
+    environment:
+      KAI_LUT_TTL_HOURS: "12"
+      KAI_LUT_CACHE: /app/cache
+    volumes:
+      - kailut-cache:/app/cache
+    expose:
+      - "43124"
+
+  web:
+    build: ./frontend
+    ports:
+      - "43123:80"
+    depends_on:
+      - api
+
+volumes:
+  kailut-cache:

@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+backend/cache/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
