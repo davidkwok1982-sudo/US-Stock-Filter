@@ -157,6 +157,9 @@ export type PriceLevel = {
   zoneLow?: number | null
   zoneHigh?: number | null
   atr?: number | null
+  /** Present when this level is strengthened by / is an SMA confluence. */
+  maWindow?: number | null
+  maConfluence?: number | null
 }
 
 export type IndexSeries = {
@@ -190,6 +193,8 @@ export type StockDetail = {
   /** Selected chart timeframe; defaults to 1d when older API omits it. */
   interval?: ChartInterval
   bars: Bar[]
+  sma10?: LinePoint[]
+  sma20?: LinePoint[]
   sma50: LinePoint[]
   sma150?: LinePoint[]
   sma200: LinePoint[]

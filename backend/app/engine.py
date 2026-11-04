@@ -13,7 +13,7 @@ from app.close_at_support import RULE_VERSION, detect_close_at_support
 from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
 from app.levels import find_levels, merge_flagged_support
-from app.metrics import SCORE_RULE_VERSION, SMA_FAST, SMA_MID, SMA_SLOW, breadth, rolling_sma
+from app.metrics import SCORE_RULE_VERSION, SMA_FAST, SMA_MID, SMA_SHORT, SMA_SLOW, SMA_ULTRA, breadth, rolling_sma
 from app.notes import build_notes
 from app import store
 from app.universe import load_universe
@@ -453,6 +453,8 @@ class Engine:
             "row": detail_row,
             "interval": interval,
             "bars": [_public_bar(bar) for bar in bars],
+            "sma10": _sma_points(bars, SMA_ULTRA),
+            "sma20": _sma_points(bars, SMA_SHORT),
             "sma50": _sma_points(bars, SMA_FAST),
             "sma150": _sma_points(bars, SMA_MID),
             "sma200": _sma_points(bars, SMA_SLOW),

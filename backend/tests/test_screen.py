@@ -553,3 +553,33 @@ def test_levels_include_atr_zones_and_min_touches():
         assert item.get("zoneLow") is not None
         assert item.get("zoneHigh") is not None
         assert item["zoneLow"] < item["price"] < item["zoneHigh"] or item["zoneLow"] <= item["price"] <= item["zoneHigh"]
+
+
+def test_ma_confluence_marks_nearby_support():
+    """A structural support near the latest SMA gets maConfluence / maWindow."""
+    from app.close_at_support import RULE_VERSION
+    from app.levels import compute_sr_clusters, find_levels
+    from app.swings import apply_ma_confluence, latest_sma_anchors
+
+    assert RULE_VERSION == 4
+    bars = _close_at_support_bars()
+    supports, _resistance, atr = compute_sr_clusters(bars)
+    assert atr is not None
+    anchors = latest_sma_anchors(bars)
+    assert any(a["window"] == 10 for a in anchors)
+    assert any(a["window"] == 20 for a in anchors)
+
+    # Force-mark confluence against a synthetic MA glued to the first support mid.
+    if supports:
+        glued = [{"window": 20, "price": float(supports[0]["price"])}]
+        boosted = apply_ma_confluence(
+            bars[-189:], supports, kind="support", atr=atr, anchors=glued
+        )
+        assert boosted[0].get("maConfluence") == 1
+        assert boosted[0].get("maWindow") == 20
+
+    levels = find_levels(bars)
+    # Levels still carry ATR zones for filter; chart only draws mid.
+    for item in levels:
+        assert item.get("zoneLow") is not None
+        assert item.get("zoneHigh") is not None

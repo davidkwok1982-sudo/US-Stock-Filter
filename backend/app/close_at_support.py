@@ -2,7 +2,7 @@
 
 Educational heuristic only — not a trading signal. Levels come from the same
 ``compute_sr_clusters`` path as the chart (structural swings + range highs/lows,
-ATR bands, ≥2 touches).
+ATR bands, ≥2 touches, SMA 10/20/50/150/200 confluence).
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 from app.levels import compute_sr_clusters
 from app.swings import SEGMENT, SWING_WINDOW, zone_half_width
 
-RULE_VERSION = 3
+RULE_VERSION = 4
 
 
 def detect_close_at_support(bars: list[dict]) -> tuple[bool, str | None, dict | None]:

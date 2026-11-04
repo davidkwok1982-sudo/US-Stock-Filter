@@ -1,7 +1,7 @@
 """Shared structural support/resistance primitives.
 
 Filter「收市近支持」and chart levels MUST use the same helpers here
-(via ``levels`` / ``close_at_support``).
+(via ``levels`` / ``close_at_support``), including SMA confluence anchors.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ MIN_TOUCH_SPAN = 5
 RANGE_LOOKBACKS = (20, 60)
 # Floor so quiet names still get a usable band.
 MIN_ZONE_PCT = 0.003
+# SMA periods folded into S/R confluence (chart + close-at-support share this).
+SR_MA_WINDOWS = (10, 20, 50, 150, 200)
 
 
 def atr_last(bars: list[dict], period: int = ATR_PERIOD) -> float | None:
@@ -200,3 +202,91 @@ def enrich_clusters(
             }
         )
     return kept
+
+
+def latest_sma_anchors(bars: list[dict], windows: tuple[int, ...] = SR_MA_WINDOWS) -> list[dict]:
+    """Latest SMA(close) values usable as S/R confluence anchors."""
+    closes = [float(bar["close"]) for bar in bars]
+    anchors: list[dict] = []
+    for window in windows:
+        if len(closes) < window:
+            continue
+        value = sum(closes[-window:]) / window
+        if value > 0:
+            anchors.append({"window": window, "price": value})
+    return anchors
+
+
+def apply_ma_confluence(
+    bars: list[dict],
+    clusters: list[dict],
+    *,
+    kind: str,
+    atr: float,
+    anchors: list[dict] | None = None,
+) -> list[dict]:
+    """Strengthen clusters near SMAs; add SMAs that themselves act as structure.
+
+    ATR-zone touch rules are unchanged. Nearby MAs only boost ranking weight and
+    may surface as levels when they independently clear MIN_TOUCHES.
+    """
+    if atr <= 0:
+        return clusters
+    if anchors is None:
+        anchors = latest_sma_anchors(bars)
+    if not anchors and not clusters:
+        return clusters
+
+    enriched = [dict(item) for item in clusters]
+    claimed: set[int] = set()
+
+    for item in enriched:
+        price = float(item["price"])
+        tol = max(CLUSTER_ATR_MULT * atr, price * MIN_ZONE_PCT)
+        best_window = None
+        best_dist = None
+        for anchor in anchors:
+            dist = abs(float(anchor["price"]) - price)
+            if dist <= tol and (best_dist is None or dist < best_dist):
+                best_dist = dist
+                best_window = int(anchor["window"])
+        if best_window is not None:
+            item["maConfluence"] = 1
+            item["maWindow"] = best_window
+            claimed.add(best_window)
+
+    for anchor in anchors:
+        window = int(anchor["window"])
+        if window in claimed:
+            continue
+        price = float(anchor["price"])
+        if price <= 0:
+            continue
+        half = zone_half_width(price, atr)
+        touches, first_i, last_i = count_zone_approaches(
+            bars, price, kind=kind, half_width=half
+        )
+        if touches < MIN_TOUCHES:
+            continue
+        if last_i - first_i < MIN_TOUCH_SPAN and touches < 3:
+            continue
+        # Skip if still essentially the same mid as an existing cluster.
+        if any(abs(price - float(item["price"])) <= max(CLUSTER_ATR_MULT * atr, price * MIN_ZONE_PCT) for item in enriched):
+            continue
+        enriched.append(
+            {
+                "price": price,
+                "touches": touches,
+                "first_index": first_i,
+                "last_index": last_i,
+                "lastIndex": last_i,
+                "zoneLow": price - half,
+                "zoneHigh": price + half,
+                "atr": atr,
+                "kind": kind,
+                "maConfluence": 1,
+                "maWindow": window,
+            }
+        )
+    return enriched
+

@@ -15,8 +15,11 @@ type RangeKey = "6m" | "1y" | "2y" | "5d" | "10d" | "60d"
 
 const UP = "#c4332b"
 const DOWN = "#1c7a45"
+const SILVER = "#c9c4b8"
+const ORANGE = "#d4896a"
 const GOLD = "#e0b15a"
 const BLUE = "#8eb4ea"
+const MA_LINE_WIDTH = 1 as const
 const RS_MACD = "#e0b15a"
 const RS_SIGNAL = "#8eb4ea"
 /** Short MACD(5,13,5) on 1w RS needs lookback + ~18 points. */
@@ -27,6 +30,8 @@ const RS_MACD_SIGNAL = 5
 
 export function StockChart({
   bars,
+  sma10 = [],
+  sma20 = [],
   sma50,
   sma150 = [],
   sma200,
@@ -36,6 +41,8 @@ export function StockChart({
   interval = "1d",
 }: {
   bars: Bar[]
+  sma10?: LinePoint[]
+  sma20?: LinePoint[]
   sma50: LinePoint[]
   sma150?: LinePoint[]
   sma200: LinePoint[]
@@ -122,44 +129,25 @@ export function StockChart({
       })),
     )
 
-    const fast = stockPane.addSeries(LineSeries, {
-      color: GOLD,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    })
-    fast.setData(
-      sma50
-        .filter((point) => timeAtOrAfter(point.time, first))
-        .map((point) => ({ time: toChartTime(point.time), value: point.value })),
-    )
-
-    const mid = stockPane.addSeries(LineSeries, {
-      color: "#9ec5b0",
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    })
-    mid.setData(
-      sma150
-        .filter((point) => timeAtOrAfter(point.time, first))
-        .map((point) => ({ time: toChartTime(point.time), value: point.value })),
-    )
-
-    const slow = stockPane.addSeries(LineSeries, {
-      color: BLUE,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    })
-    slow.setData(
-      sma200
-        .filter((point) => timeAtOrAfter(point.time, first))
-        .map((point) => ({ time: toChartTime(point.time), value: point.value })),
-    )
+    const plotMa = (series: LinePoint[], color: string) => {
+      const line = stockPane.addSeries(LineSeries, {
+        color,
+        lineWidth: MA_LINE_WIDTH,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+      line.setData(
+        series
+          .filter((point) => timeAtOrAfter(point.time, first))
+          .map((point) => ({ time: toChartTime(point.time), value: point.value })),
+      )
+    }
+    plotMa(sma10, SILVER)
+    plotMa(sma20, ORANGE)
+    plotMa(sma50, GOLD)
+    plotMa(sma150, "#9ec5b0")
+    plotMa(sma200, BLUE)
 
     for (const level of levels) {
       const base = level.kind === "support" ? GOLD : BLUE
@@ -289,7 +277,7 @@ export function StockChart({
 
     chart.timeScale().fitContent()
     return () => chart.remove()
-  }, [bars, index, interval, levels, range, sma50, sma150, sma200])
+  }, [bars, index, interval, levels, range, sma10, sma20, sma50, sma150, sma200])
 
   return <div ref={host} className="h-[520px] w-full sm:h-[680px]" />
 }

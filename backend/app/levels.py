@@ -1,6 +1,7 @@
-"""Structural support and resistance with ATR zones.
+"""Structural support and resistance with ATR zones + SMA confluence.
 
 Uses the same primitives as ``close_at_support`` (via ``swings``).
+SMA(10/20/50/150/200) strengthen nearby levels or appear when they act as structure.
 """
 
 from __future__ import annotations
@@ -10,17 +11,24 @@ from app.swings import (
     MIN_TOUCHES,
     SEGMENT,
     SWING_WINDOW,
+    apply_ma_confluence,
     atr_last,
     cluster_by_atr,
     count_zone_approaches,
     enrich_clusters,
+    latest_sma_anchors,
     structural_extrema,
     zone_half_width,
 )
 
 
 def compute_sr_clusters(bars: list[dict], window: int = SWING_WINDOW) -> tuple[list[dict], list[dict], float | None]:
-    """Return (support_clusters, resistance_clusters, atr) before top-N trim."""
+    """Return (support_clusters, resistance_clusters, atr) before top-N trim.
+
+    Structural swings + range highs/lows stay primary. Latest SMA(10/20/50/150/200)
+    values strengthen nearby clusters and may appear as levels when they clear the
+    same ATR-zone touch rules.
+    """
     if len(bars) < window * 2 + 5:
         return [], [], None
     segment = bars[-SEGMENT:]
@@ -30,6 +38,7 @@ def compute_sr_clusters(bars: list[dict], window: int = SWING_WINDOW) -> tuple[l
 
     low_points = structural_extrema(segment, window=window, kind="low")
     high_points = structural_extrema(segment, window=window, kind="high")
+    anchors = latest_sma_anchors(segment)
 
     supports = enrich_clusters(
         segment,
@@ -42,6 +51,12 @@ def compute_sr_clusters(bars: list[dict], window: int = SWING_WINDOW) -> tuple[l
         cluster_by_atr(high_points, atr),
         kind="resistance",
         atr=atr,
+    )
+    supports = apply_ma_confluence(
+        segment, supports, kind="support", atr=atr, anchors=anchors
+    )
+    resistance = apply_ma_confluence(
+        segment, resistance, kind="resistance", atr=atr, anchors=anchors
     )
     return supports, resistance, atr
 
@@ -59,7 +74,11 @@ def find_levels(bars: list[dict], window: int = SWING_WINDOW) -> list[dict]:
     def choose(clusters: list[dict], kind: str) -> list[dict]:
         ranked = sorted(
             clusters,
-            key=lambda item: (item["touches"], item["lastIndex"]),
+            key=lambda item: (
+                int(item.get("maConfluence") or 0),
+                item["touches"],
+                item["lastIndex"],
+            ),
             reverse=True,
         )
         picked: list[dict] = []
@@ -76,18 +95,23 @@ def find_levels(bars: list[dict], window: int = SWING_WINDOW) -> list[dict]:
                 label = "支持帶" if touches >= 3 else "支持"
             else:
                 label = "阻力帶" if touches >= 3 else "阻力"
+            ma_window = item.get("maWindow")
+            if ma_window:
+                label = f"{label}（貼近{int(ma_window)}天線）"
             half = zone_half_width(price, float(item.get("atr") or atr))
-            picked.append(
-                {
-                    "price": round(price, 2),
-                    "kind": kind,
-                    "touches": touches,
-                    "label": label,
-                    "zoneLow": round(price - half, 2),
-                    "zoneHigh": round(price + half, 2),
-                    "atr": round(float(item.get("atr") or atr), 4),
-                }
-            )
+            entry = {
+                "price": round(price, 2),
+                "kind": kind,
+                "touches": touches,
+                "label": label,
+                "zoneLow": round(price - half, 2),
+                "zoneHigh": round(price + half, 2),
+                "atr": round(float(item.get("atr") or atr), 4),
+            }
+            if ma_window:
+                entry["maWindow"] = int(ma_window)
+                entry["maConfluence"] = 1
+            picked.append(entry)
             if len(picked) >= 3:
                 break
         return picked

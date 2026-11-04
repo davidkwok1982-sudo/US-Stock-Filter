@@ -31,9 +31,9 @@ function defaultRange(interval: ChartInterval): RangeKey {
 }
 
 function smaHint(interval: ChartInterval): string {
-  if (interval === "1wk") return "金線 50週 · 綠線 150週 · 藍線 200週"
-  if (interval === "1h") return "金線 50小時 · 綠線 150小時 · 藍線 200小時"
-  return "金線 50天 · 綠線 150天 · 藍線 200天"
+  if (interval === "1wk") return "銀線 10週 · 橙線 20週 · 金線 50週 · 綠線 150週 · 藍線 200週"
+  if (interval === "1h") return "銀線 10小時 · 橙線 20小時 · 金線 50小時 · 綠線 150小時 · 藍線 200小時"
+  return "銀線 10天 · 橙線 20天 · 金線 50天 · 綠線 150天 · 藍線 200天"
 }
 
 export function StockPage() {
@@ -189,7 +189,7 @@ export function StockPage() {
               <p>
                 上方指數（SPY）陰陽燭 · 升紅跌綠 · {smaHint(chartInterval)} · 成交量 · 相對強度
                 RS（近一星期對 SPY）· MACD 樣式
-                {chartInterval === "1d" ? " · 虛線中軸為支持／阻力，淺虛線為 ±0.5×ATR 區間" : ""}
+                {chartInterval === "1d" ? " · 虛線中軸為支持／阻力（結構＋均線匯合；篩選仍用 ±0.5×ATR 區）" : ""}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex gap-1" role="group" aria-label="圖表週期">
@@ -238,6 +238,8 @@ export function StockPage() {
             ) : (
               <StockChart
                 bars={detail.bars}
+                sma10={detail.sma10 ?? []}
+                sma20={detail.sma20 ?? []}
                 sma50={detail.sma50}
                 sma150={detail.sma150 ?? []}
                 sma200={detail.sma200}
@@ -405,7 +407,7 @@ export function StockPicker() {
   return (
     <div className="mx-auto max-w-lg py-8">
       <h1 className="font-heading text-3xl font-semibold">個股詳情</h1>
-      <p className="mt-2 text-sm text-muted-foreground">從篩選結果選一隻股份，或輸入代號。圖表上方為 SPY 指數陰陽燭，中間為股價與50／150／200天線，下方為成交量，並標出結構支持／阻力區（擺動＋近20／60日高低、≥2次觸及、±0.5×ATR）。</p>
+      <p className="mt-2 text-sm text-muted-foreground">從篩選結果選一隻股份，或輸入代號。圖表上方為 SPY 指數陰陽燭，中間為股價與10／20／50／150／200天線，下方為成交量，並標出結構支持／阻力中軸（擺動＋近20／60日高低、均線匯合、≥2次觸及；篩選用 ±0.5×ATR 區）。</p>
       <Input
         className="mt-5"
         value={query}
