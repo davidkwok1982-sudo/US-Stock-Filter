@@ -197,6 +197,7 @@ export function StockPage() {
               levels={detail.levels}
               range={range}
               interval={chartInterval}
+              symbol={row.symbol}
             />
           </section>
 

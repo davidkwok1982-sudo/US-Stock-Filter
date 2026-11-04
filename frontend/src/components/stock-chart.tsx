@@ -26,6 +26,7 @@ export function StockChart({
   levels,
   range,
   interval = "1d",
+  symbol,
 }: {
   bars: Bar[]
   sma50: LinePoint[]
@@ -34,6 +35,7 @@ export function StockChart({
   levels: PriceLevel[]
   range: RangeKey
   interval?: ChartInterval
+  symbol?: string
 }) {
   const host = useRef<HTMLDivElement>(null)
 
@@ -72,11 +74,92 @@ export function StockChart({
       },
     })
 
-    let stockPane = 0
-    let volumePane = 1
+    // Stock owns the default pane first so it cannot be swallowed if a later
+    // index pane fails or collapses. SPY is added last and moved above.
+    const stockPane = chart.panes()[0]
+    if (!stockPane) {
+      chart.remove()
+      return
+    }
 
+    const candle = stockPane.addSeries(CandlestickSeries, {
+      upColor: UP,
+      downColor: DOWN,
+      borderUpColor: UP,
+      borderDownColor: DOWN,
+      wickUpColor: UP,
+      wickDownColor: DOWN,
+      priceLineVisible: false,
+      ...(symbol ? { title: symbol } : {}),
+    })
+    candle.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.08 } })
+    candle.setData(
+      candles.map((bar) => ({
+        time: toChartTime(bar.time),
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+      })),
+    )
+
+    const fast = stockPane.addSeries(LineSeries, {
+      color: GOLD,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+    })
+    fast.setData(
+      sma50
+        .filter((point) => timeAtOrAfter(point.time, first))
+        .map((point) => ({ time: toChartTime(point.time), value: point.value })),
+    )
+
+    const slow = stockPane.addSeries(LineSeries, {
+      color: BLUE,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+    })
+    slow.setData(
+      sma200
+        .filter((point) => timeAtOrAfter(point.time, first))
+        .map((point) => ({ time: toChartTime(point.time), value: point.value })),
+    )
+
+    for (const level of levels) {
+      candle.createPriceLine({
+        price: level.price,
+        color: level.kind === "support" ? GOLD : BLUE,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: level.label,
+      })
+    }
+
+    const volumePane = chart.addPane(false)
+    const volume = volumePane.addSeries(HistogramSeries, {
+      priceFormat: { type: "volume" },
+      priceLineVisible: false,
+      lastValueVisible: false,
+      title: "成交量",
+    })
+    volume.priceScale().applyOptions({ scaleMargins: { top: 0.15, bottom: 0 } })
+    volume.setData(
+      candles.map((bar) => ({
+        time: toChartTime(bar.time),
+        value: bar.volume,
+        color: bar.close >= bar.open ? "rgba(196,51,43,0.55)" : "rgba(28,122,69,0.55)",
+      })),
+    )
+
+    let spyPane = null as ReturnType<typeof chart.addPane> | null
     if (indexBars.length > 0) {
-      const spy = chart.addSeries(CandlestickSeries, {
+      spyPane = chart.addPane(false)
+      const spy = spyPane.addSeries(CandlestickSeries, {
         upColor: UP,
         downColor: DOWN,
         borderUpColor: UP,
@@ -96,114 +179,24 @@ export function StockChart({
           close: bar.close,
         })),
       )
-      chart.addPane(true)
-      stockPane = 1
-      volumePane = 2
+      // Place SPY above the stock pane without making it the primary series at create time.
+      spyPane.moveTo(0)
     }
 
-    const candle = chart.addSeries(
-      CandlestickSeries,
-      {
-        upColor: UP,
-        downColor: DOWN,
-        borderUpColor: UP,
-        borderDownColor: DOWN,
-        wickUpColor: UP,
-        wickDownColor: DOWN,
-        priceLineVisible: false,
-      },
-      stockPane,
-    )
-    candle.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.08 } })
-    candle.setData(
-      candles.map((bar) => ({
-        time: toChartTime(bar.time),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-      })),
-    )
-
-    const fast = chart.addSeries(
-      LineSeries,
-      {
-        color: GOLD,
-        lineWidth: 2,
-        priceLineVisible: false,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
-      },
-      stockPane,
-    )
-    fast.setData(
-      sma50
-        .filter((point) => timeAtOrAfter(point.time, first))
-        .map((point) => ({ time: toChartTime(point.time), value: point.value })),
-    )
-
-    const slow = chart.addSeries(
-      LineSeries,
-      {
-        color: BLUE,
-        lineWidth: 2,
-        priceLineVisible: false,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
-      },
-      stockPane,
-    )
-    slow.setData(
-      sma200
-        .filter((point) => timeAtOrAfter(point.time, first))
-        .map((point) => ({ time: toChartTime(point.time), value: point.value })),
-    )
-
-    for (const level of levels) {
-      candle.createPriceLine({
-        price: level.price,
-        color: level.kind === "support" ? GOLD : BLUE,
-        lineWidth: 1,
-        lineStyle: LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: level.label,
-      })
-    }
-
-    chart.addPane(true)
-    const volume = chart.addSeries(
-      HistogramSeries,
-      {
-        priceFormat: { type: "volume" },
-        priceLineVisible: false,
-        lastValueVisible: false,
-        title: "成交量",
-      },
-      volumePane,
-    )
-    volume.priceScale().applyOptions({ scaleMargins: { top: 0.15, bottom: 0 } })
-    volume.setData(
-      candles.map((bar) => ({
-        time: toChartTime(bar.time),
-        value: bar.volume,
-        color: bar.close >= bar.open ? "rgba(196,51,43,0.55)" : "rgba(28,122,69,0.55)",
-      })),
-    )
-
+    // Relative sizes: SPY ~22%, stock ~55%, volume ~23% (or stock/volume when no index).
     const panes = chart.panes()
-    const height = element.clientHeight
-    if (panes.length >= 3) {
-      panes[0]?.setHeight(Math.max(110, Math.floor(height * 0.22)))
-      panes[1]?.setHeight(Math.max(240, Math.floor(height * 0.55)))
-      panes[2]?.setHeight(Math.max(80, Math.floor(height * 0.23)))
-    } else if (panes.length > 1) {
-      panes[0]?.setHeight(Math.max(280, Math.floor(height * 0.72)))
-      panes[1]?.setHeight(Math.max(90, Math.floor(height * 0.28)))
+    if (spyPane && panes.length >= 3) {
+      panes[0]?.setStretchFactor(0.22)
+      panes[1]?.setStretchFactor(0.55)
+      panes[2]?.setStretchFactor(0.23)
+    } else if (panes.length >= 2) {
+      panes[0]?.setStretchFactor(0.72)
+      panes[1]?.setStretchFactor(0.28)
     }
 
     chart.timeScale().fitContent()
     return () => chart.remove()
-  }, [bars, index, interval, levels, range, sma50, sma200])
+  }, [bars, index, interval, levels, range, sma50, sma200, symbol])
 
   return <div ref={host} className="h-[520px] w-full sm:h-[680px]" />
 }
