@@ -2,6 +2,7 @@ import { useMemo, type CSSProperties } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { formatPct, toneClass } from "@/lib/format.ts"
 import { cn } from "@/lib/utils.ts"
 import type { ScreenRow } from "@/lib/types.ts"
 
@@ -119,7 +120,7 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
             細分版塊熱力圖
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            按篩選結果的細分版塊家數排名；顏色愈熱、區塊愈大代表愈領先。每隻股顯示所屬版塊。
+            第二階段名單按細分版塊家數排名，先看領導版塊，再在版塊內找評分／相對強度較高的股份。每隻股顯示所屬版塊。
           </p>
         </div>
         <p className="text-sm text-muted-foreground">
@@ -175,7 +176,7 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
           <span className="size-2.5 rounded-sm" style={{ background: "rgba(196,165,116,0.28)" }} />
           家數較少
         </span>
-        <span>排名依篩選後家數；同一版塊內可按評分深淺略作區分。</span>
+        <span>排名依第二階段篩選後家數；版塊內按評分排序，並顯示六個月 RS。</span>
       </div>
     </section>
   )
@@ -253,20 +254,35 @@ function IndustryBlock({
                     onClick={() => onOpen(row.symbol)}
                     className={cn(
                       "rounded-md border px-2 py-1 text-left transition-colors hover:border-primary/50 hover:bg-card",
-                      hero && bucket.rank <= 2 ? "min-w-[4.5rem]" : "min-w-[3.75rem]",
+                      hero && bucket.rank <= 2 ? "min-w-[5.25rem]" : "min-w-[4.5rem]",
                       tileShade(row.score, maxScore),
                     )}
                   >
-                    <span className={cn("block font-medium", hero ? "text-sm" : "text-xs")}>
-                      {row.symbol}
-                    </span>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className={cn("font-medium", hero ? "text-sm" : "text-xs")}>
+                        {row.symbol}
+                      </span>
+                      <span className="num text-[10px] text-muted-foreground" title="評分">
+                        {row.score}
+                      </span>
+                    </div>
                     {name ? (
-                      <span className="block max-w-[7rem] truncate text-[10px] text-muted-foreground">
+                      <span className="block max-w-[7.5rem] truncate text-[10px] text-muted-foreground">
                         {name}
                       </span>
                     ) : null}
                     <span className="mt-0.5 block max-w-[7.5rem] truncate text-[10px] leading-tight text-brass">
                       {board}
+                    </span>
+                    <span
+                      className={cn(
+                        "num mt-0.5 block text-[10px]",
+                        toneClass(row.rs6m),
+                        row.rsBeat ? "font-medium" : "",
+                      )}
+                      title="六個月相對 SPY"
+                    >
+                      RS {formatPct(row.rs6m)}
                     </span>
                   </button>
                 </TooltipTrigger>
@@ -276,7 +292,8 @@ function IndustryBlock({
                     {row.name ? ` · ${row.name}` : ""}
                   </span>
                   <span>版塊：{board}</span>
-                  <span className="text-background/80">評分 {row.score}</span>
+                  <span className="text-background/80">評分 {row.score} · 六個月 RS {formatPct(row.rs6m)}</span>
+                  {row.rsBeat ? <span className="text-background/80">跑贏 SPY</span> : null}
                 </TooltipContent>
               </Tooltip>
             </li>
