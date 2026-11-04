@@ -195,6 +195,8 @@ export type StockDetail = {
   }
   /** Company intro from Yahoo assetProfile; null when unavailable. */
   profile?: CompanyProfile | null
+  /** True when company profile may still upgrade via /profile. */
+  profilePending?: boolean
   meta: ScreenMeta | null
 }
 

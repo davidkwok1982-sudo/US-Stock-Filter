@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 
 import { StockChart } from "@/components/stock-chart.tsx"
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
-import { fetchStock } from "@/lib/api.ts"
+import { fetchStock, fetchStockProfile } from "@/lib/api.ts"
 import {
   formatPct,
   formatPrice,
@@ -41,21 +41,32 @@ export function StockPage() {
   const [detail, setDetail] = useState<StockDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [chartLoading, setChartLoading] = useState(false)
+  const [profileLoading, setProfileLoading] = useState(false)
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1d")
   const [range, setRange] = useState<RangeKey>("1y")
   const [summaryOpen, setSummaryOpen] = useState(false)
+
+  const loadedSymbolRef = useRef<string>("")
 
   useEffect(() => {
     const cleaned = symbol.trim().toUpperCase()
     if (!cleaned) return
     let stop = false
-    setLoading(true)
+    const sameSymbol = loadedSymbolRef.current === cleaned
+    if (sameSymbol) {
+      setChartLoading(true)
+    } else {
+      setLoading(true)
+      setDetail(null)
+      setSummaryOpen(false)
+      loadedSymbolRef.current = ""
+    }
     setError(null)
-    setDetail(null)
-    setSummaryOpen(false)
     fetchStock(cleaned, chartInterval)
       .then((next) => {
         if (stop) return
+        loadedSymbolRef.current = next.row.symbol
         setDetail(next)
         sessionStorage.setItem("kailut-symbol", next.row.symbol)
         document.title = `美股篩選器 · ${next.row.symbol}`
@@ -64,12 +75,56 @@ export function StockPage() {
         if (!stop) setError(reason instanceof Error ? reason.message : "未能載入這隻股份")
       })
       .finally(() => {
-        if (!stop) setLoading(false)
+        if (!stop) {
+          setLoading(false)
+          setChartLoading(false)
+        }
       })
     return () => {
       stop = true
     }
   }, [symbol, chartInterval])
+
+  useEffect(() => {
+    const cleaned = symbol.trim().toUpperCase()
+    if (!cleaned || !detail || detail.row.symbol !== cleaned) return
+    if (!detail.profilePending) return
+    let stop = false
+    setProfileLoading(true)
+    fetchStockProfile(cleaned)
+      .then((extra) => {
+        if (stop) return
+        setDetail((current) => {
+          if (!current || current.row.symbol !== cleaned) return current
+          return {
+            ...current,
+            profile: extra.profile ?? current.profile,
+            profilePending: false,
+            row: {
+              ...current.row,
+              ...Object.fromEntries(
+                Object.entries(extra.row).filter(([, value]) => value !== undefined && value !== null),
+              ),
+            } as StockDetail["row"],
+            notes: {
+              ...current.notes,
+              fundamental: extra.notes?.fundamental?.length
+                ? extra.notes.fundamental
+                : current.notes.fundamental,
+            },
+          }
+        })
+      })
+      .catch(() => {
+        /* profile is secondary — keep chart usable */
+      })
+      .finally(() => {
+        if (!stop) setProfileLoading(false)
+      })
+    return () => {
+      stop = true
+    }
+  }, [symbol, detail?.row.symbol, detail?.profilePending])
 
   function selectInterval(next: ChartInterval) {
     setChartInterval(next)
@@ -79,26 +134,29 @@ export function StockPage() {
   if (!symbol) return <StockPicker />
 
   const row = detail?.row
+  const showChartSkeleton = (loading && !detail) || chartLoading
+
   return (
     <div className="space-y-5">
       <Button asChild variant="ghost" size="sm" className="-ml-2">
         <Link to="/">返回篩選</Link>
       </Button>
 
-      {loading ? (
-        <div className="space-y-3" aria-live="polite">
-          <Skeleton className="h-10 w-48" />
-          <Skeleton className="h-[420px] w-full" />
-        </div>
-      ) : null}
-
-      {error ? (
+      {error && !detail ? (
         <div className="rounded-xl border border-dashed border-border px-4 py-12 text-center">
           <p className="font-heading text-2xl">未能打開這隻股份</p>
           <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           <Button asChild className="mt-4" variant="outline">
             <Link to="/stock">改看其他代號</Link>
           </Button>
+        </div>
+      ) : null}
+
+      {loading && !detail ? (
+        <div className="space-y-3" aria-live="polite">
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-[420px] w-full rounded-xl" />
+          <Skeleton className="h-24 w-full" />
         </div>
       ) : null}
 
@@ -126,24 +184,7 @@ export function StockPage() {
             </div>
           </header>
 
-          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-            <Fact label="市值" value={formatUsdLabeled(row.marketCap)} />
-            <Fact label="日均成交額" value={formatUsdLabeled(row.dollarVolume)} />
-            <Fact label="對200天" value={formatPct(row.vsSma200)} className={toneClass(row.vsSma200)} />
-          </dl>
-
-          <ul className="flex flex-wrap gap-2 text-sm">
-            <Gate label="價＞50＞150＞200" ok={!row.failCodes.includes("ma_stack") && (row.maStacked ?? row.aboveSma200)} />
-            <Gate label="均線向上" ok={!row.failCodes.includes("ma_slope") && row.slopeUp} />
-            <Gate label="市值逾20億" ok={!row.failCodes.includes("cap")} />
-          </ul>
-          {row.failReasons.length > 0 ? (
-            <p className="text-sm text-muted-foreground">未過：{row.failReasons.join("、")}</p>
-          ) : null}
-
-          {detail.profile ? <CompanyProfileCard profile={detail.profile} summaryOpen={summaryOpen} onToggleSummary={() => setSummaryOpen((v) => !v)} /> : null}
-
-          <section className="overflow-hidden rounded-xl bg-chart text-white">
+          <section className="relative overflow-hidden rounded-xl bg-chart text-white">
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-[#d9d2c5]">
               <p>
                 上方指數（SPY）陰陽燭 · 升紅跌綠 · {smaHint(chartInterval)} · 成交量 · 相對強度
@@ -190,17 +231,23 @@ export function StockPage() {
                 </div>
               </div>
             </div>
-            <StockChart
-              bars={detail.bars}
-              sma50={detail.sma50}
-              sma150={detail.sma150 ?? []}
-              sma200={detail.sma200}
-              index={detail.index ?? null}
-              levels={detail.levels}
-              range={range}
-              interval={chartInterval}
-              symbol={row.symbol}
-            />
+            {showChartSkeleton ? (
+              <div className="px-3 pb-3" aria-live="polite">
+                <Skeleton className="h-[380px] w-full bg-white/10" />
+              </div>
+            ) : (
+              <StockChart
+                bars={detail.bars}
+                sma50={detail.sma50}
+                sma150={detail.sma150 ?? []}
+                sma200={detail.sma200}
+                index={detail.index ?? null}
+                levels={detail.levels}
+                range={range}
+                interval={chartInterval}
+                symbol={row.symbol}
+              />
+            )}
           </section>
 
           {chartInterval === "1d" ? (
@@ -221,6 +268,36 @@ export function StockPage() {
             <p className="text-sm text-muted-foreground">支持／阻力僅在日線顯示；週線與小時圖顯示陰陽燭、均線、成交量與相對強度 RS（近一星期對 SPY）。資料點太少時會隱藏 RS 窗格。</p>
           )}
 
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+            <Fact label="市值" value={formatUsdLabeled(row.marketCap)} />
+            <Fact label="日均成交額" value={formatUsdLabeled(row.dollarVolume)} />
+            <Fact label="對200天" value={formatPct(row.vsSma200)} className={toneClass(row.vsSma200)} />
+          </dl>
+
+          <ul className="flex flex-wrap gap-2 text-sm">
+            <Gate label="價＞50＞150＞200" ok={!row.failCodes.includes("ma_stack") && (row.maStacked ?? row.aboveSma200)} />
+            <Gate label="均線向上" ok={!row.failCodes.includes("ma_slope") && row.slopeUp} />
+            <Gate label="市值逾20億" ok={!row.failCodes.includes("cap")} />
+          </ul>
+          {row.failReasons.length > 0 ? (
+            <p className="text-sm text-muted-foreground">未過：{row.failReasons.join("、")}</p>
+          ) : null}
+
+          {detail.profile ? (
+            <CompanyProfileCard profile={detail.profile} summaryOpen={summaryOpen} onToggleSummary={() => setSummaryOpen((v) => !v)} />
+          ) : profileLoading || detail.profilePending ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="font-heading text-xl">公司資料</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3" aria-live="polite">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-56" />
+                <Skeleton className="h-20 w-full" />
+              </CardContent>
+            </Card>
+          ) : null}
+
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
             <Card>
               <CardHeader>
@@ -238,11 +315,18 @@ export function StockPage() {
                 <Separator />
                 <div>
                   <p className="text-xs tracking-[0.16em] text-muted-foreground">基本</p>
-                  <ul className="mt-2 space-y-2 text-sm leading-relaxed">
-                    {detail.notes.fundamental.map((line) => (
-                      <li key={line}>{line}</li>
-                    ))}
-                  </ul>
+                  {profileLoading && detail.profilePending ? (
+                    <div className="mt-2 space-y-2" aria-live="polite">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </div>
+                  ) : (
+                    <ul className="mt-2 space-y-2 text-sm leading-relaxed">
+                      {detail.notes.fundamental.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 {detail.notes.disclaimer ? (
                   <p className="border-t border-border pt-3 text-sm font-medium">{detail.notes.disclaimer}</p>
