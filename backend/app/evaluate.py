@@ -13,6 +13,7 @@ from app.metrics import (
     MIN_MARKET_CAP,
     NEAR_HIGH_WITHIN,
     PENNY_PRICE,
+    RS_DAYS_1W,
     RS_DAYS_3M,
     RS_DAYS_6M,
     SMA_FAST,
@@ -87,10 +88,13 @@ def evaluate(
         if estimated is not None:
             beta = round(estimated, 2)
             beta_basis = "90d-spy"
+    ret1w = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_1W) if stock_closes else None
     ret3 = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_3M) if stock_closes else None
     ret6 = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_6M) if stock_closes else None
+    spy_ret1w = window_return(spy_closes, spy_dates, RS_DAYS_1W) if spy_closes else None
     spy_ret3 = window_return(spy_closes, spy_dates, RS_DAYS_3M) if spy_closes else None
     spy_ret6 = window_return(spy_closes, spy_dates, RS_DAYS_6M) if spy_closes else None
+    rs1w = ret1w - spy_ret1w if ret1w is not None and spy_ret1w is not None else None
     rs3 = ret3 - spy_ret3 if ret3 is not None and spy_ret3 is not None else None
     rs6 = ret6 - spy_ret6 if ret6 is not None and spy_ret6 is not None else None
 
@@ -143,10 +147,8 @@ def evaluate(
         above50=above50,
         slope50=slope50,
         slope200=slope200,
-        drawdown=drawdown,
-        rs6=rs6,
+        rs1w=rs1w,
         dollar=dollar,
-        beta=beta,
     )
     groups = list(base.get("groups") or [])
     name = quote.get("name") or base.get("name") or base.get("symbol")
@@ -184,11 +186,13 @@ def evaluate(
         "closeAtSupportNote": close_at_support_note,
         "beta": beta,
         "betaBasis": beta_basis,
+        "ret1w": ret1w,
         "ret3m": ret3,
         "ret6m": ret6,
+        "rs1w": rs1w,
         "rs3m": rs3,
         "rs6m": rs6,
-        "rsBeat": bool(rs6 is not None and rs6 > 0),
+        "rsBeat": bool(rs1w is not None and rs1w > 0),
         "pe": quote.get("pe"),
         "score": score,
         "scoreParts": parts,
@@ -216,6 +220,7 @@ def spy_snapshot(spy_bars: list[dict]) -> dict:
         "symbol": "SPY",
         "price": _round(price),
         "marketDate": spy_bars[-1]["time"] if spy_bars else None,
+        "ret1w": window_return(closes, dates, RS_DAYS_1W),
         "ret3m": window_return(closes, dates, RS_DAYS_3M),
         "ret6m": window_return(closes, dates, RS_DAYS_6M),
     }

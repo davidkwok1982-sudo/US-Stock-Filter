@@ -278,9 +278,7 @@ export function StockPage() {
                 <dl className="space-y-1 text-sm">
                   <Pair label="50天線" value={row.sma50 == null ? "—" : formatPrice(row.sma50)} />
                   <Pair label="200天線" value={row.sma200 == null ? "—" : formatPrice(row.sma200)} />
-                  <Pair label="52週高位" value={row.high52 == null ? "—" : formatPrice(row.high52)} />
-                  <Pair label="距高位" value={formatPct(row.pctFromHigh)} />
-                  <Pair label="三個月RS" value={formatPct(row.rs3m)} />
+                  <Pair label="一星期RS" value={formatPct(row.rs1w ?? null)} />
                   <Pair label="市盈率" value={row.pe == null ? "—" : `${row.pe.toFixed(1)} 倍`} />
                 </dl>
               </CardContent>

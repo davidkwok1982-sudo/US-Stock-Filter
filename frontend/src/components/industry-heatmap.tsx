@@ -176,7 +176,7 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
           <span className="size-2.5 rounded-sm" style={{ background: "rgba(196,165,116,0.28)" }} />
           家數較少
         </span>
-        <span>排名依第二階段篩選後家數；版塊內按評分排序，並顯示六個月 RS。</span>
+        <span>排名依第二階段篩選後家數；版塊內按評分排序，並顯示一星期 RS。</span>
       </div>
     </section>
   )
@@ -277,12 +277,12 @@ function IndustryBlock({
                     <span
                       className={cn(
                         "num mt-0.5 block text-[10px]",
-                        toneClass(row.rs6m),
+                        toneClass(row.rs1w ?? row.rs6m),
                         row.rsBeat ? "font-medium" : "",
                       )}
-                      title="六個月相對 SPY"
+                      title="一星期相對 SPY"
                     >
-                      RS {formatPct(row.rs6m)}
+                      RS {formatPct(row.rs1w ?? row.rs6m)}
                     </span>
                   </button>
                 </TooltipTrigger>
@@ -292,7 +292,7 @@ function IndustryBlock({
                     {row.name ? ` · ${row.name}` : ""}
                   </span>
                   <span>版塊：{board}</span>
-                  <span className="text-background/80">評分 {row.score} · 六個月 RS {formatPct(row.rs6m)}</span>
+                  <span className="text-background/80">評分 {row.score} · 六個月 RS {formatPct(row.rs1w ?? row.rs6m)}</span>
                   {row.rsBeat ? <span className="text-background/80">跑贏 SPY</span> : null}
                 </TooltipContent>
               </Tooltip>

@@ -84,15 +84,12 @@ def build_notes(row: dict, levels: list[dict]) -> dict:
             high_bits.append(f"較52週高位回落 {_pct(drawdown)}（高位 {_px(high_52)}），並未貼近高位")
         if (row.get("barsCount") or 0) < 252:
             high_bits.append("現有日線不足一年，高位只覆蓋已下載數據")
-    rs6 = row.get("rs6m")
-    rs3 = row.get("rs3m")
-    if rs6 is not None:
-        if rs6 >= 0:
-            high_bits.append(f"六個月回報較 SPY 高出 {rs6 * 100:.1f} 個百分點")
+    rs1w = row.get("rs1w")
+    if rs1w is not None:
+        if rs1w >= 0:
+            high_bits.append(f"近一星期回報較 SPY 高出 {rs1w * 100:.1f} 個百分點")
         else:
-            high_bits.append(f"六個月回報落後 SPY {abs(rs6) * 100:.1f} 個百分點，相對強度偏弱")
-        if rs3 is not None:
-            high_bits.append(f"近三個月差距為 {rs3 * 100:+.1f} 個百分點")
+            high_bits.append(f"近一星期回報落後 SPY {abs(rs1w) * 100:.1f} 個百分點，相對強度偏弱")
     if high_bits:
         technical.append("，".join(high_bits) + "。")
 

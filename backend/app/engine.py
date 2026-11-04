@@ -12,7 +12,7 @@ from app.close_at_support import RULE_VERSION, detect_close_at_support
 from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
 from app.levels import find_levels
-from app.metrics import SMA_FAST, SMA_SLOW, breadth, rolling_sma
+from app.metrics import SCORE_RULE_VERSION, SMA_FAST, SMA_SLOW, breadth, rolling_sma
 from app.notes import build_notes
 from app import store
 from app.universe import load_universe
@@ -143,6 +143,7 @@ class Engine:
                     "minBeta": 1,
                     "nearHighWithin": 0.25,
                     "closeAtSupportRuleVersion": RULE_VERSION,
+                    "scoreRuleVersion": SCORE_RULE_VERSION,
                     "breadthBullish": 200,
                     "breadthCautiousBelow": 100,
                 },
@@ -170,6 +171,12 @@ class Engine:
             or criteria.get("closeAtSupportRuleVersion") != RULE_VERSION
         ):
             self._backfill_close_at_support(snapshot)
+        criteria = (snapshot.get("meta") or {}).get("criteria") or {}
+        if (
+            any("rs1w" not in row for row in snapshot["rows"])
+            or criteria.get("scoreRuleVersion") != SCORE_RULE_VERSION
+        ):
+            self._backfill_score_rules(snapshot)
         slim = []
         for row in snapshot["rows"]:
             item = dict(row)
@@ -198,6 +205,49 @@ class Engine:
         criteria.pop("breakoutRetestRuleVersion", None)
         store.save_snapshot(snapshot)
         log.info("backfilled closeAtSupport v%s on %s cached rows", RULE_VERSION, len(snapshot["rows"]))
+
+    def _backfill_score_rules(self, snapshot: dict) -> None:
+        """Recompute rs1w / score / rsBeat on cached rows when score rules change."""
+        spy_bars = store.load_chart("SPY") or []
+        updated = []
+        for row in snapshot["rows"]:
+            bars = store.load_chart(row["symbol"])
+            quote = {
+                "price": row.get("price"),
+                "changePct": row.get("changePct"),
+                "marketCap": row.get("marketCap"),
+                "pe": row.get("pe"),
+                "name": row.get("name"),
+                "exchange": row.get("exchange"),
+                "exchangeName": row.get("exchange"),
+                "quoteType": "EQUITY",
+                "avgVolume3m": None,
+            }
+            vendor_beta = row.get("beta") if row.get("betaBasis") == "yahoo" else None
+            base = {
+                "symbol": row["symbol"],
+                "name": row.get("name") or row["symbol"],
+                "groups": list(row.get("groups") or []),
+                "sector": row.get("sectorEn") or row.get("sector"),
+                "industry": row.get("industryEn") or row.get("industry"),
+            }
+            fresh = evaluate(base, bars, quote, spy_bars, vendor_beta=vendor_beta)
+            # Preserve fields that evaluate does not re-derive from quotes alone.
+            for key in ("closeAtSupport", "closeAtSupportNote", "revenueGrowth", "earningsGrowth", "profitMargin"):
+                if key in row:
+                    fresh[key] = row[key]
+            updated.append(fresh)
+        updated.sort(key=lambda item: (-item["score"], item["symbol"]))
+        snapshot["rows"] = updated
+        meta = snapshot.setdefault("meta", {})
+        if spy_bars:
+            meta["spy"] = spy_snapshot(spy_bars)
+            meta["summary"] = summarize(updated)
+            meta["breadth"] = breadth(meta["summary"]["pass"])
+        criteria = meta.setdefault("criteria", {})
+        criteria["scoreRuleVersion"] = SCORE_RULE_VERSION
+        store.save_snapshot(snapshot)
+        log.info("backfilled score rules v%s on %s cached rows", SCORE_RULE_VERSION, len(updated))
 
     def detail(self, symbol: str, interval: str = "1d") -> dict:
         symbol = normalize_symbol(symbol)

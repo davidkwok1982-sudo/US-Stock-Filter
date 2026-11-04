@@ -20,6 +20,7 @@ SMA_SLOW = 200
 SLOPE_LOOKBACK = 20
 BETA_LOOKBACK = 90
 BETA_MIN_OBS = 60
+RS_DAYS_1W = 5
 RS_DAYS_3M = 63
 RS_DAYS_6M = 126
 DOLLAR_DAYS = 63
@@ -27,15 +28,17 @@ HIGH_DAYS = 252
 PENNY_PRICE = 5.0
 MICRO_CAP = 300_000_000
 
+# Bump when score parts / RS definition change so cached rows recompute.
+SCORE_RULE_VERSION = 2
+
+# Freed nearHigh(15)+beta(5)=20 → slope / vsSma200 / rs / liquidity.
 SCORE_MAX = {
-    "dist200": 15,
+    "dist200": 20,
     "above50": 15,
-    "slope50": 10,
-    "slope200": 10,
-    "nearHigh": 15,
-    "rs6": 20,
+    "slope50": 15,
+    "slope200": 15,
+    "rs1w": 25,
     "liquidity": 10,
-    "beta": 5,
 }
 
 
@@ -122,10 +125,10 @@ def points_distance(distance: float | None) -> int:
     if distance is None or distance <= 0:
         return 0
     if distance <= 0.30:
-        return 15
+        return SCORE_MAX["dist200"]
     if distance <= 0.60:
-        return 9
-    return 4
+        return 12
+    return 5
 
 
 def points_flag(ok: bool, points: int) -> int:
@@ -133,7 +136,7 @@ def points_flag(ok: bool, points: int) -> int:
 
 
 def points_near_high(drawdown: float | None) -> int:
-    """drawdown is price/high - 1. Zero means sitting on the high."""
+    """Legacy helper kept for tests; no longer used in build_score."""
     if drawdown is None:
         return 0
     if drawdown >= -0.08:
@@ -147,12 +150,16 @@ def points_near_high(drawdown: float | None) -> int:
     return 0
 
 
-def points_rs(excess: float | None) -> int:
+def points_rs(excess: float | None, maximum: int | None = None) -> int:
+    """Score ~1-week excess return vs SPY.
+
+    -5pp or worse → 0; flat → ~40% of max; +8pp or better → max.
+    """
+    ceiling = SCORE_MAX["rs1w"] if maximum is None else maximum
     if excess is None:
         return 0
-    # -20% excess -> 0, 0% -> 8, +30% or more -> 20
-    scaled = (excess + 0.20) / 0.50
-    return int(max(0, min(20, round(scaled * 20))))
+    scaled = (excess + 0.05) / 0.13
+    return int(max(0, min(ceiling, round(scaled * ceiling))))
 
 
 def points_liquidity(dollar: float | None) -> int:
@@ -160,10 +167,11 @@ def points_liquidity(dollar: float | None) -> int:
         return 0
     ratio = dollar / MIN_DOLLAR_VOLUME
     raw = 4 + math.log2(ratio) * 2
-    return int(max(0, min(10, round(raw))))
+    return int(max(0, min(SCORE_MAX["liquidity"], round(raw))))
 
 
 def points_beta(beta: float | None) -> int:
+    """Legacy helper kept for tests; no longer used in build_score."""
     if beta is None or beta < MIN_BETA:
         return 0
     if beta <= 1.6:
@@ -179,10 +187,8 @@ def build_score(
     above50: bool,
     slope50: float | None,
     slope200: float | None,
-    drawdown: float | None,
-    rs6: float | None,
+    rs1w: float | None,
     dollar: float | None,
-    beta: float | None,
 ) -> tuple[int, list[dict]]:
     parts = [
         {
@@ -210,28 +216,16 @@ def build_score(
             "max": SCORE_MAX["slope200"],
         },
         {
-            "key": "nearHigh",
-            "label": "貼近52週高位",
-            "points": points_near_high(drawdown),
-            "max": SCORE_MAX["nearHigh"],
-        },
-        {
-            "key": "rs6",
-            "label": "六個月相對 SPY",
-            "points": points_rs(rs6),
-            "max": SCORE_MAX["rs6"],
+            "key": "rs1w",
+            "label": "一星期相對 SPY",
+            "points": points_rs(rs1w),
+            "max": SCORE_MAX["rs1w"],
         },
         {
             "key": "liquidity",
             "label": "流動性",
             "points": points_liquidity(dollar),
             "max": SCORE_MAX["liquidity"],
-        },
-        {
-            "key": "beta",
-            "label": "貝他區間",
-            "points": points_beta(beta),
-            "max": SCORE_MAX["beta"],
         },
     ]
     total = sum(part["points"] for part in parts)

@@ -28,7 +28,7 @@ const COLUMNS: { key: SortKey; label: string; tip: string; align: "left" | "righ
   { key: "dollarVolume", label: "日均成交額", tip: "近63日或三個月估算", align: "right" },
   { key: "vsSma200", label: "對200天", tip: "現價相對200天線", align: "right" },
   { key: "beta", label: "貝他", tip: "Yahoo 公布值，否則為90日對 SPY", align: "right" },
-  { key: "rs6m", label: "六個月RS", tip: "六個月回報減 SPY", align: "right" },
+  { key: "rs1w", label: "一星期RS", tip: "近約5個交易日回報減 SPY", align: "right" },
   { key: "score", label: "評分", tip: "0至100，只用於排序", align: "right" },
 ]
 
@@ -95,7 +95,7 @@ export function ScreenTable({
                   {formatBeta(row.beta)}
                   <span className="ml-1 text-[10px] text-muted-foreground">{betaCaption(row.betaBasis)}</span>
                 </TableCell>
-                <TableCell className={`num text-right ${toneClass(row.rs6m)}`}>{formatPct(row.rs6m)}</TableCell>
+                <TableCell className={`num text-right ${toneClass(row.rs1w ?? row.rs6m)}`}>{formatPct(row.rs1w ?? row.rs6m)}</TableCell>
                 <TableCell className="text-right">
                   <ScoreMark score={row.score} />
                 </TableCell>
@@ -140,7 +140,7 @@ export function ScreenTable({
                 <div className="flex justify-between gap-2">
                   <dt>貝他 / RS</dt>
                   <dd className="num text-foreground">
-                    {formatBeta(row.beta)} · {formatPct(row.rs6m)}
+                    {formatBeta(row.beta)} · {formatPct(row.rs1w ?? row.rs6m)}
                   </dd>
                 </div>
               </dl>

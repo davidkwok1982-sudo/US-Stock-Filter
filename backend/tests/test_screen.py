@@ -81,13 +81,14 @@ def test_score_weights_sum_to_100():
 
 
 def test_score_edges():
-    assert points_rs(-0.20) == 0
-    assert points_rs(0) == 8
-    assert points_rs(0.30) == 20
+    # 1-week RS scale: -5pp→0, flat→~10, +8pp→25
+    assert points_rs(-0.05) == 0
+    assert points_rs(0) == 10
+    assert points_rs(0.08) == 25
     assert points_rs(None) == 0
     assert points_distance(0) == 0
-    assert points_distance(0.1) == 15
-    assert points_distance(0.8) == 4
+    assert points_distance(0.1) == 20
+    assert points_distance(0.8) == 5
     assert points_near_high(0) == 15
     assert points_near_high(-0.2) == 8
     assert points_near_high(-0.5) == 0
@@ -139,6 +140,10 @@ def test_uptrend_passes_stage_two():
     assert row["sector"] == "資訊科技"
     assert row["industry"] == "半導體"
     assert row["score"] > 40
+    assert "rs1w" in row
+    assert row["rsBeat"] == (row["rs1w"] is not None and row["rs1w"] > 0)
+    assert all(part["key"] not in {"nearHigh", "beta", "rs6"} for part in row["scoreParts"])
+    assert any(part["key"] == "rs1w" for part in row["scoreParts"])
     assert row["failReasons"] == []
 
 

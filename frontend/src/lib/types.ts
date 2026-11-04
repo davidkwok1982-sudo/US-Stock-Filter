@@ -44,8 +44,10 @@ export type ScreenRow = {
   closeAtSupportNote?: string | null
   beta: number | null
   betaBasis: "yahoo" | "90d-spy" | null
+  ret1w?: number | null
   ret3m: number | null
   ret6m: number | null
+  rs1w?: number | null
   rs3m: number | null
   rs6m: number | null
   rsBeat: boolean
@@ -99,6 +101,7 @@ export type ScreenMeta = {
     symbol: string
     price: number | null
     marketDate: string | null
+    ret1w?: number | null
     ret3m: number | null
     ret6m: number | null
   }
@@ -197,7 +200,7 @@ export type SortKey =
   | "dollarVolume"
   | "vsSma200"
   | "beta"
-  | "rs6m"
+  | "rs1w" | "rs6m"
   | "score"
 
 export type Filters = {
