@@ -33,7 +33,6 @@ export function StockChart({
   levels,
   range,
   interval = "1d",
-  symbol,
 }: {
   bars: Bar[]
   sma50: LinePoint[]
@@ -77,7 +76,10 @@ export function StockChart({
         vertLines: { color: "rgba(255,255,255,0.045)" },
         horzLines: { color: "rgba(255,255,255,0.045)" },
       },
-      rightPriceScale: { borderColor: "rgba(255,255,255,0.12)" },
+      rightPriceScale: {
+        borderColor: "rgba(255,255,255,0.12)",
+        minimumWidth: 72,
+      },
       timeScale: {
         borderColor: "rgba(255,255,255,0.12)",
         fixLeftEdge: true,
@@ -103,7 +105,9 @@ export function StockChart({
       wickUpColor: UP,
       wickDownColor: DOWN,
       priceLineVisible: false,
-      ...(symbol ? { title: symbol } : {}),
+      // Keep symbol off the pane; page legend already names it. Price on right axis.
+      title: "",
+      lastValueVisible: true,
     })
     candle.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.08 } })
     candle.setData(
@@ -159,7 +163,7 @@ export function StockChart({
       priceFormat: { type: "volume" },
       priceLineVisible: false,
       lastValueVisible: false,
-      title: "成交量",
+      title: "",
     })
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.15, bottom: 0 } })
     volume.setData(
@@ -177,7 +181,7 @@ export function StockChart({
       const hist = rsPane.addSeries(HistogramSeries, {
         priceLineVisible: false,
         lastValueVisible: false,
-        title: "RS",
+        title: "",
         priceFormat: { type: "price", precision: 2, minMove: 0.01 },
       })
       hist.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.08 } })
@@ -229,7 +233,8 @@ export function StockChart({
         wickUpColor: UP,
         wickDownColor: DOWN,
         priceLineVisible: false,
-        title: index?.symbol ?? "SPY",
+        title: "",
+        lastValueVisible: true,
       })
       spy.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } })
       spy.setData(
@@ -267,7 +272,7 @@ export function StockChart({
 
     chart.timeScale().fitContent()
     return () => chart.remove()
-  }, [bars, index, interval, levels, range, sma50, sma200, symbol])
+  }, [bars, index, interval, levels, range, sma50, sma200])
 
   return <div ref={host} className="h-[520px] w-full sm:h-[680px]" />
 }
