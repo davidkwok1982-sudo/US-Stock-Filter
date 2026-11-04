@@ -33,6 +33,7 @@ class Engine:
             "message": "尚未更新",
             "error": None,
         }
+        self._industry_backfill_running = False
 
     def status(self) -> dict:
         with self._lock:
@@ -124,11 +125,13 @@ class Engine:
             quote_ok += len(quotes)
 
             for item in batch:
+                quote = quotes.get(item["symbol"])
+                base = self._base_with_cached_profile(item, quote)
                 rows.append(
                     evaluate(
-                        item,
+                        base,
                         charts.get(item["symbol"]),
-                        quotes.get(item["symbol"]),
+                        quote,
                         spy_bars,
                     )
                 )
@@ -152,6 +155,8 @@ class Engine:
         if quote_ok < 0.3 * total:
             raise RuntimeError(f"報價下載不足（{quote_ok}/{total}），未覆寫快取")
 
+        self._set(progress=91, message="正在補齊行業分類")
+        self._enrich_rows_with_profiles(rows, fetch_missing=True, pass_hard_first=True)
         self._set(progress=94, message="正在整理結果")
         rows.sort(key=lambda row: (-row["score"], row["symbol"]))
         snapshot = self._build_snapshot(
@@ -162,6 +167,8 @@ class Engine:
             chart_failures=len(symbols) - chart_ok,
             partial=False,
         )
+        criteria = snapshot["meta"].setdefault("criteria", {})
+        criteria["industrySource"] = "yahoo-assetProfile"
         store.save_snapshot(snapshot)
         store.prune_charts(set(symbols) | {"SPY"})
         summary = snapshot["meta"]["summary"]
@@ -233,6 +240,8 @@ class Engine:
             or criteria.get("scoreRuleVersion") != SCORE_RULE_VERSION
         ):
             self._backfill_score_rules(snapshot)
+        if self._needs_industry_backfill(snapshot):
+            self.start_industry_backfill()
         slim = []
         for row in snapshot["rows"]:
             item = dict(row)
@@ -428,6 +437,205 @@ class Engine:
             "profile": profile,
             "meta": None if snapshot is None else snapshot["meta"],
         }
+
+
+    def _base_with_cached_profile(self, item: dict, quote: dict | None) -> dict:
+        """Merge universe row with quote/cache sector+industry before evaluate."""
+        base = dict(item)
+        quote = quote or {}
+        sector = base.get("sector") or quote.get("sector")
+        industry = base.get("industry") or quote.get("industry")
+        if not sector or not industry:
+            cached = self._cached_sector_industry(base["symbol"])
+            if cached:
+                sector = sector or cached.get("sector")
+                industry = industry or cached.get("industry")
+        base["sector"] = sector
+        base["industry"] = industry
+        return base
+
+    def _cached_sector_industry(self, symbol: str) -> dict | None:
+        cached = store.load_fundamentals(symbol)
+        if not cached:
+            return None
+        sector = cached.get("sector")
+        industry = cached.get("industry")
+        if not sector and not industry:
+            return None
+        stamp = cached.get("updatedAt")
+        if not stamp:
+            return {"sector": sector, "industry": industry}
+        try:
+            parsed = datetime.fromisoformat(stamp)
+        except ValueError:
+            return {"sector": sector, "industry": industry}
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - parsed > FUNDAMENTAL_TTL:
+            return None
+        return {"sector": sector, "industry": industry}
+
+    def _apply_profile_to_row(self, row: dict, profile: dict | None) -> bool:
+        if not profile:
+            return False
+        changed = False
+        sector_en = profile.get("sector")
+        industry_en = profile.get("industry")
+        if sector_en and (not row.get("sectorEn") or not row.get("sector")):
+            row["sectorEn"] = sector_en
+            row["sector"] = sector_zh(sector_en)
+            changed = True
+        if industry_en and (not row.get("industryEn") or not row.get("industry")):
+            row["industryEn"] = industry_en
+            row["industry"] = industry_zh(industry_en)
+            changed = True
+        return changed
+
+    def _persist_profile(self, symbol: str, profile: dict) -> None:
+        existing = store.load_fundamentals(symbol) or {}
+        existing.pop("updatedAt", None)
+        if profile.get("sector"):
+            existing["sector"] = profile["sector"]
+        if profile.get("industry"):
+            existing["industry"] = profile["industry"]
+        store.save_fundamentals(symbol, existing)
+
+    def _row_needs_industry(self, row: dict) -> bool:
+        return not (
+            row.get("industryEn")
+            or row.get("sectorEn")
+            or row.get("industry")
+            or row.get("sector")
+        )
+
+    def _enrich_rows_with_profiles(
+        self,
+        rows: list[dict],
+        *,
+        fetch_missing: bool = True,
+        pass_hard_first: bool = True,
+        workers: int | None = None,
+        quiet: bool = False,
+    ) -> int:
+        """Fill sector/industry from fundamentals cache and Yahoo assetProfile."""
+        filled = 0
+        missing: list[str] = []
+        for row in rows:
+            if not self._row_needs_industry(row):
+                continue
+            cached = self._cached_sector_industry(row["symbol"])
+            if cached and self._apply_profile_to_row(row, cached):
+                filled += 1
+                continue
+            if fetch_missing:
+                missing.append(row["symbol"])
+
+        if not fetch_missing or not missing:
+            return filled
+
+        if pass_hard_first:
+            pass_hard = {row["symbol"] for row in rows if row.get("passHard")}
+            missing.sort(key=lambda symbol: (0 if symbol in pass_hard else 1, symbol))
+
+        worker_count = max(1, workers or WORKERS)
+        client = get_client()
+        total_missing = len(missing)
+        chunk = max(50, CHUNK_SIZE)
+        by_symbol = {row["symbol"]: row for row in rows}
+
+        for start in range(0, total_missing, chunk):
+            batch = missing[start : start + chunk]
+            if not quiet:
+                self._set(
+                    progress=min(93, 91 + int(2 * start / max(total_missing, 1))),
+                    message=f"正在補齊行業分類 {min(start + len(batch), total_missing)}/{total_missing}",
+                )
+            profiles = client.asset_profiles(batch, workers=worker_count)
+            for symbol, profile in profiles.items():
+                self._persist_profile(symbol, profile)
+                row = by_symbol.get(symbol)
+                if row and self._apply_profile_to_row(row, profile):
+                    filled += 1
+        log.info("industry enrich filled=%s fetched_attempt=%s", filled, total_missing)
+        return filled
+
+    def _needs_industry_backfill(self, snapshot: dict) -> bool:
+        rows = snapshot.get("rows") or []
+        targets = [row for row in rows if row.get("passHard")] or rows
+        if not targets:
+            return False
+        return any(self._row_needs_industry(row) for row in targets)
+
+    def start_industry_backfill(self) -> bool:
+        with self._lock:
+            if self._status["running"] or self._industry_backfill_running:
+                return False
+            self._industry_backfill_running = True
+        threading.Thread(
+            target=self._run_industry_backfill,
+            name="kailut-industry-backfill",
+            daemon=True,
+        ).start()
+        return True
+
+    def _run_industry_backfill(self) -> None:
+        try:
+            snapshot = store.load_snapshot()
+            if not snapshot:
+                return
+            rows = snapshot.get("rows") or []
+            if not rows:
+                return
+            missing_pass = [
+                row for row in rows if row.get("passHard") and self._row_needs_industry(row)
+            ]
+            log.info("industry backfill start missing_passHard=%s", len(missing_pass))
+            # Fill passHard first and persist so the heatmap updates quickly.
+            if missing_pass:
+                filled_pass = self._enrich_rows_with_profiles(
+                    missing_pass,
+                    fetch_missing=True,
+                    pass_hard_first=True,
+                    quiet=True,
+                )
+                # Mirror labels onto the snapshot rows (same dict objects if shared).
+                by_symbol = {row["symbol"]: row for row in rows}
+                for row in missing_pass:
+                    target = by_symbol.get(row["symbol"])
+                    if target is not None and target is not row:
+                        self._apply_profile_to_row(
+                            target,
+                            {
+                                "sector": row.get("sectorEn") or row.get("sector"),
+                                "industry": row.get("industryEn") or row.get("industry"),
+                            },
+                        )
+                rows.sort(key=lambda row: (-row["score"], row["symbol"]))
+                snapshot["rows"] = rows
+                meta = snapshot.setdefault("meta", {})
+                criteria = meta.setdefault("criteria", {})
+                criteria["industrySource"] = "yahoo-assetProfile"
+                store.save_snapshot(snapshot)
+                log.info("industry backfill passHard filled=%s", filled_pass)
+            # Then remaining evaluated rows from cache/Yahoo.
+            filled_rest = self._enrich_rows_with_profiles(
+                rows,
+                fetch_missing=True,
+                pass_hard_first=False,
+                quiet=True,
+            )
+            rows.sort(key=lambda row: (-row["score"], row["symbol"]))
+            snapshot["rows"] = rows
+            meta = snapshot.setdefault("meta", {})
+            criteria = meta.setdefault("criteria", {})
+            criteria["industrySource"] = "yahoo-assetProfile"
+            store.save_snapshot(snapshot)
+            log.info("industry backfill done rest_filled=%s", filled_rest)
+        except Exception:
+            log.exception("industry backfill failed")
+        finally:
+            with self._lock:
+                self._industry_backfill_running = False
 
     def _fundamentals(self, symbol: str) -> dict | None:
         cached = store.load_fundamentals(symbol)

@@ -45,6 +45,16 @@ def normalize_quote(payload: dict) -> dict:
     market_cap = _number(payload.get("marketCap"))
     if market_cap is not None and market_cap <= 0:
         market_cap = None
+    sector = payload.get("sector")
+    industry = payload.get("industry")
+    if not isinstance(sector, str) or not sector.strip():
+        sector = None
+    else:
+        sector = sector.strip()
+    if not isinstance(industry, str) or not industry.strip():
+        industry = None
+    else:
+        industry = industry.strip()
     return {
         "price": _number(payload.get("regularMarketPrice")),
         "changePct": change,
@@ -57,6 +67,8 @@ def normalize_quote(payload: dict) -> dict:
         "quoteType": payload.get("quoteType"),
         "marketTime": payload.get("regularMarketTime"),
         "currency": payload.get("currency"),
+        "sector": sector,
+        "industry": industry,
     }
 
 
@@ -291,6 +303,58 @@ class YahooClient:
                 return
             with lock:
                 found[symbol] = value
+
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+            list(pool.map(job, symbols))
+        return found
+
+    def asset_profile(self, symbol: str) -> dict | None:
+        """Light quoteSummary: sector/industry only (assetProfile module)."""
+        response = self._get(
+            self._main,
+            f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{quote(symbol, safe='-')}",
+            params={"modules": "assetProfile"},
+            auth=True,
+        )
+        if response is None:
+            return None
+        try:
+            payload = response.json()
+        except ValueError:
+            return None
+        result = (payload.get("quoteSummary") or {}).get("result") or []
+        if not result:
+            return None
+        profile = result[0].get("assetProfile") or {}
+        sector = profile.get("sector")
+        industry = profile.get("industry")
+        if not isinstance(sector, str) or not sector.strip():
+            sector = None
+        else:
+            sector = sector.strip()
+        if not isinstance(industry, str) or not industry.strip():
+            industry = None
+        else:
+            industry = industry.strip()
+        if not sector and not industry:
+            return None
+        return {"sector": sector, "industry": industry}
+
+    def asset_profiles(self, symbols: list[str], workers: int = 8, on_each=None) -> dict[str, dict]:
+        found: dict[str, dict] = {}
+        lock = threading.Lock()
+
+        def job(symbol: str) -> None:
+            profile = None
+            try:
+                profile = self.asset_profile(symbol)
+            except Exception:
+                profile = None
+            if profile:
+                with lock:
+                    found[symbol] = profile
+            if on_each:
+                on_each(symbol, bool(profile))
 
         with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
             list(pool.map(job, symbols))

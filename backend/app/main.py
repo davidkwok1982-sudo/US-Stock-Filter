@@ -27,6 +27,9 @@ async def lifespan(_app: FastAPI):
     if snapshot is None or store.is_stale(snapshot):
         log.info("cache missing or stale; starting refresh")
         engine.start()
+    elif engine._needs_industry_backfill(snapshot):
+        log.info("screen cache missing industry labels; starting backfill")
+        engine.start_industry_backfill()
     yield
 
 

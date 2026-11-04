@@ -99,8 +99,8 @@ def evaluate(
     exchange_name = quote.get("exchangeName")
     otc = is_otc(exchange, exchange_name)
     quote_type = quote.get("quoteType")
-    sector_en = base.get("sector")
-    industry_en = base.get("industry")
+    sector_en = base.get("sector") or quote.get("sector")
+    industry_en = base.get("industry") or quote.get("industry")
 
     fail_codes: list[str] = []
     stack_ok = (

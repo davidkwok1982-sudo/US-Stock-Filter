@@ -406,3 +406,72 @@ def test_evaluate_includes_close_at_support_flag():
     assert "closeAtSupport" in row
     assert isinstance(row["closeAtSupport"], bool)
     assert "breakoutRetest" not in row
+
+
+def test_evaluate_uses_quote_sector_industry_when_base_empty():
+    stock_bars, spy_bars = _uptrend_pair()
+    row = evaluate(
+        {"symbol": "EXM", "name": "Example", "groups": ["us"], "sector": None, "industry": None},
+        stock_bars,
+        {
+            "price": stock_bars[-1]["close"],
+            "marketCap": 80e9,
+            "quoteType": "EQUITY",
+            "exchangeName": "NasdaqGS",
+            "sector": "Healthcare",
+            "industry": "Drug Manufacturers - General",
+        },
+        spy_bars,
+    )
+    assert row["sectorEn"] == "Healthcare"
+    assert row["industryEn"] == "Drug Manufacturers - General"
+    assert row["sector"]
+    assert row["industry"]
+
+
+def test_apply_profile_to_row_sets_zh_labels(tmp_path, monkeypatch):
+    from app.engine import Engine
+    from app import store as store_mod
+
+    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
+    engine = Engine()
+    row = {"symbol": "LLY", "sector": None, "sectorEn": None, "industry": None, "industryEn": None}
+    changed = engine._apply_profile_to_row(
+        row, {"sector": "Healthcare", "industry": "Drug Manufacturers - General"}
+    )
+    assert changed is True
+    assert row["sectorEn"] == "Healthcare"
+    assert row["industryEn"] == "Drug Manufacturers - General"
+    assert row["sector"] is not None
+    assert row["industry"] is not None
+    assert engine._row_needs_industry(row) is False
+
+
+def test_enrich_rows_uses_fundamentals_cache(tmp_path, monkeypatch):
+    from app.engine import Engine
+    from app import store as store_mod
+
+    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
+    store_mod.init_db()
+    store_mod.save_fundamentals(
+        "MA", {"sector": "Financial Services", "industry": "Credit Services"}
+    )
+    engine = Engine()
+    rows = [
+        {
+            "symbol": "MA",
+            "passHard": True,
+            "score": 80,
+            "sector": None,
+            "sectorEn": None,
+            "industry": None,
+            "industryEn": None,
+        }
+    ]
+    filled = engine._enrich_rows_with_profiles(rows, fetch_missing=False)
+    assert filled == 1
+    assert rows[0]["sectorEn"] == "Financial Services"
+    assert rows[0]["industryEn"] == "Credit Services"
+    assert rows[0]["industry"]  # zh or passthrough
