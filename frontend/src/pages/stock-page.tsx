@@ -18,7 +18,7 @@ import {
 import { useScreen } from "@/lib/screen-context.tsx"
 import type { ChartInterval, CompanyProfile, StockDetail } from "@/lib/types.ts"
 
-type RangeKey = "6m" | "1y" | "2y" | "5d" | "10d" | "60d"
+type RangeKey = "all" | "6m" | "1y" | "2y" | "5d" | "10d" | "60d"
 
 const INTERVALS: { key: ChartInterval; label: string }[] = [
   { key: "1d", label: "日線" },
@@ -26,12 +26,9 @@ const INTERVALS: { key: ChartInterval; label: string }[] = [
   { key: "1h", label: "小時" },
 ]
 
-function defaultRange(interval: ChartInterval): RangeKey {
-  // Visible window on load / timeframe switch (chart filters + fitContent).
-  // Data fetch already covers these: 1d→2y, 1wk→5y, 1h→60d (yahoo CHART_INTERVALS).
-  if (interval === "1h") return "60d"
-  if (interval === "1wk") return "2y"
-  return "6m"
+function defaultRange(_interval: ChartInterval): RangeKey {
+  // Show every loaded bar; range buttons still slice on demand. fitContent in chart.
+  return "all"
 }
 
 function smaHint(interval: ChartInterval): string {

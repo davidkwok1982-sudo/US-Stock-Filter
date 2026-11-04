@@ -11,7 +11,7 @@ import {
 
 import type { Bar, ChartInterval, ChartTime, IndexSeries, LinePoint, PriceLevel } from "@/lib/types.ts"
 
-type RangeKey = "6m" | "1y" | "2y" | "5d" | "10d" | "60d"
+type RangeKey = "all" | "6m" | "1y" | "2y" | "5d" | "10d" | "60d"
 
 const UP = "#c4332b"
 const DOWN = "#1c7a45"
@@ -57,10 +57,11 @@ export function StockChart({
   useEffect(() => {
     const element = host.current
     if (!element || bars.length === 0) return
-    const start = cutoff(range, interval)
-    const candles = bars.filter((bar) => timeAtOrAfter(bar.time, start))
+    // "all" = every loaded bar (default). Other keys still slice for range buttons.
+    const start = range === "all" ? null : cutoff(range, interval)
+    const candles = start == null ? bars : bars.filter((bar) => timeAtOrAfter(bar.time, start))
     if (candles.length === 0) return
-    const first = candles[0]?.time ?? start
+    const first = candles[0]?.time ?? bars[0]!.time
 
     const indexBars = indexCandles(index, first)
     // Use full history for EMA warmup, then plot from visible range.
@@ -304,7 +305,7 @@ function timeKey(time: ChartTime): string {
   return typeof time === "number" ? String(time) : time
 }
 
-function cutoff(range: RangeKey, interval: ChartInterval): ChartTime {
+function cutoff(range: Exclude<RangeKey, "all">, interval: ChartInterval): ChartTime {
   const now = Date.now()
   if (interval === "1h") {
     const hours = range === "5d" ? 5 * 24 : range === "10d" ? 10 * 24 : 60 * 24
