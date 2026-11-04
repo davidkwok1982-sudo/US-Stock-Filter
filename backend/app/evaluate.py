@@ -192,6 +192,16 @@ def evaluate(
         "closeAtSupportTouches": (
             int(close_at_support_level["touches"]) if close_at_support_level else None
         ),
+        "closeAtSupportZoneLow": (
+            round(close_at_support_level["zoneLow"], 2)
+            if close_at_support_level and close_at_support_level.get("zoneLow") is not None
+            else None
+        ),
+        "closeAtSupportZoneHigh": (
+            round(close_at_support_level["zoneHigh"], 2)
+            if close_at_support_level and close_at_support_level.get("zoneHigh") is not None
+            else None
+        ),
         "ret1w": ret1w,
         "ret3m": ret3,
         "ret6m": ret6,

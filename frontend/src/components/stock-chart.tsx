@@ -162,15 +162,38 @@ export function StockChart({
     )
 
     for (const level of levels) {
+      const base = level.kind === "support" ? GOLD : BLUE
+      // Mid-line (structural level). Zone edges are lighter dashed bands.
       candle.createPriceLine({
         price: level.price,
-        color: level.kind === "support" ? GOLD : BLUE,
+        color: base,
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
         // Labels live in the level list under the chart; titles cover candles.
         axisLabelVisible: false,
         title: "",
       })
+      const zoneLow = level.zoneLow
+      const zoneHigh = level.zoneHigh
+      if (
+        typeof zoneLow === "number" &&
+        typeof zoneHigh === "number" &&
+        zoneLow < zoneHigh &&
+        (Math.abs(zoneLow - level.price) > 1e-6 || Math.abs(zoneHigh - level.price) > 1e-6)
+      ) {
+        const edge =
+          level.kind === "support" ? "rgba(224,177,90,0.35)" : "rgba(142,180,234,0.35)"
+        for (const price of [zoneLow, zoneHigh]) {
+          candle.createPriceLine({
+            price,
+            color: edge,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: false,
+            title: "",
+          })
+        }
+      }
     }
 
     const volumePane = chart.addPane(false)

@@ -361,17 +361,19 @@ def _close_at_support_bars() -> list[dict]:
         )
         day += timedelta(days=1)
 
-    bars[-1]["close"] = 100.6
-    bars[-1]["low"] = 100.1
-    bars[-1]["high"] = 101.2
-    bars[-1]["open"] = 100.8
+    # Finish inside the ATR support zone around ~100 (not above zoneHigh).
+    bars[-1]["close"] = 100.2
+    bars[-1]["low"] = 99.8
+    bars[-1]["high"] = 100.6
+    bars[-1]["open"] = 100.0
     return bars
 
 
 def test_close_at_support_detects_synthetic_pattern():
     from app.close_at_support import detect_close_at_support
     from app.levels import find_levels, merge_flagged_support
-    from app.swings import SWING_WINDOW
+    from app.close_at_support import RULE_VERSION
+    from app.swings import MIN_TOUCHES, ZONE_ATR_MULT
 
     bars = _close_at_support_bars()
     matched, note, flagged = detect_close_at_support(bars)
@@ -379,10 +381,15 @@ def test_close_at_support_detects_synthetic_pattern():
     assert note is not None
     assert flagged is not None
     assert flagged["price"] > 0
-    assert SWING_WINDOW == 8
+    assert flagged["touches"] >= MIN_TOUCHES
+    assert flagged.get("zoneLow") is not None and flagged.get("zoneHigh") is not None
+    assert flagged["zoneLow"] <= bars[-1]["close"] <= flagged["zoneHigh"]
+    assert RULE_VERSION >= 3
+    assert ZONE_ATR_MULT == 0.5
     levels = merge_flagged_support(find_levels(bars), flagged)
     supports = [item for item in levels if item["kind"] == "support"]
     assert any(abs(item["price"] - flagged["price"]) / flagged["price"] < 0.015 for item in supports)
+    assert any(item.get("zoneLow") is not None for item in supports)
 
 
 def test_close_at_support_false_when_far_above():
@@ -412,7 +419,7 @@ def test_close_at_support_false_when_clearly_broken():
 
 
 def test_close_at_support_ignores_weak_window6_only_swing():
-    """PGNY fixture: window-6-only 29.93 low must not pass under unified window=8."""
+    """PGNY fixture: weak/single 29.93 area must not become a ≥2-touch structural support."""
     import json
     from pathlib import Path
 
@@ -442,9 +449,15 @@ def test_merge_flagged_support_inserts_missing_level():
         {"price": 25.24, "kind": "support", "touches": 2, "label": "支持"},
         {"price": 33.0, "kind": "resistance", "touches": 1, "label": "阻力"},
     ]
-    merged = merge_flagged_support(levels, {"price": 29.93, "touches": 1})
+    merged = merge_flagged_support(
+        levels,
+        {"price": 29.93, "touches": 2, "zoneLow": 29.2, "zoneHigh": 30.66, "atr": 1.46},
+    )
     supports = [item for item in merged if item["kind"] == "support"]
-    assert any(item["price"] == 29.93 and item["label"] == "收市近支持" for item in supports)
+    hit = next(item for item in supports if item["price"] == 29.93)
+    assert hit["label"] == "收市近支持"
+    assert hit["zoneLow"] == 29.2
+    assert hit["zoneHigh"] == 30.66
 
 def test_evaluate_includes_close_at_support_flag():
     stock_bars, spy_bars = _uptrend_pair()
@@ -526,3 +539,17 @@ def test_enrich_rows_uses_fundamentals_cache(tmp_path, monkeypatch):
     assert rows[0]["sectorEn"] == "Financial Services"
     assert rows[0]["industryEn"] == "Credit Services"
     assert rows[0]["industry"]  # zh or passthrough
+
+
+def test_levels_include_atr_zones_and_min_touches():
+    from app.levels import find_levels
+    from app.swings import MIN_TOUCHES
+
+    bars = _close_at_support_bars()
+    levels = find_levels(bars)
+    assert levels
+    for item in levels:
+        assert item["touches"] >= MIN_TOUCHES
+        assert item.get("zoneLow") is not None
+        assert item.get("zoneHigh") is not None
+        assert item["zoneLow"] < item["price"] < item["zoneHigh"] or item["zoneLow"] <= item["price"] <= item["zoneHigh"]

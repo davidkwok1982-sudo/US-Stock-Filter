@@ -47,6 +47,8 @@ export type ScreenRow = {
   closeAtSupportNote?: string | null
   closeAtSupportLevel?: number | null
   closeAtSupportTouches?: number | null
+  closeAtSupportZoneLow?: number | null
+  closeAtSupportZoneHigh?: number | null
   ret1w?: number | null
   ret3m: number | null
   ret6m: number | null
@@ -151,6 +153,10 @@ export type PriceLevel = {
   kind: "support" | "resistance"
   touches: number
   label: string
+  /** ATR band edges (±0.5×ATR around mid); optional for older payloads. */
+  zoneLow?: number | null
+  zoneHigh?: number | null
+  atr?: number | null
 }
 
 export type IndexSeries = {

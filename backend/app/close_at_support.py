@@ -1,88 +1,69 @@
-"""Detect when the latest daily close sits right at a swing support.
+"""Detect when the latest daily close sits inside a structural support zone.
 
-Educational heuristic only — not a trading signal. Tuned for a selective
-but non-empty hit rate on a liquid US universe (tens of passHard names).
-
-Swing window / clustering MUST match ``levels.find_levels`` (via ``swings``).
+Educational heuristic only — not a trading signal. Levels come from the same
+``compute_sr_clusters`` path as the chart (structural swings + range highs/lows,
+ATR bands, ≥2 touches).
 """
 
 from __future__ import annotations
 
-from app.swings import CLUSTER_TOL, SEGMENT, SWING_WINDOW, cluster, swing_extrema
+from app.levels import compute_sr_clusters
+from app.swings import SEGMENT, SWING_WINDOW, zone_half_width
 
-RULE_VERSION = 2
-
-# Close within this band of the chosen support counts as "at support".
-_BAND_ABOVE = 0.012  # up to +1.2% above support
-_BAND_BELOW = 0.010  # small pierce: up to -1.0% below
-_BROKEN_BELOW = 0.018  # clearly broken if more than ~1.8% under support
-_MIN_MULTI_AGE = 8  # multi-touch levels should span some time
+RULE_VERSION = 3
 
 
 def detect_close_at_support(bars: list[dict]) -> tuple[bool, str | None, dict | None]:
     """Return (matched, note, flagged_level).
 
-    ``flagged_level`` is ``{"price", "touches"}`` when matched, else ``None``.
+    ``flagged_level`` includes ``price``, ``touches``, ``zoneLow``, ``zoneHigh``,
+    ``atr`` when matched, else ``None``. Match = last close inside the support zone.
     """
     if len(bars) < SWING_WINDOW * 2 + 40:
         return False, None, None
 
+    supports, _resistance, atr = compute_sr_clusters(bars)
+    if atr is None or not supports:
+        return False, None, None
+
     segment = bars[-SEGMENT:]
-    n = len(segment)
-    last_close = segment[-1]["close"]
+    last_close = float(segment[-1]["close"])
     if not last_close or last_close <= 0:
         return False, None, None
 
-    swing_lows = swing_extrema(segment, window=SWING_WINDOW, kind="low")
-    if not swing_lows:
-        return False, None, None
-
-    clusters = _quality_supports(cluster(swing_lows, CLUSTER_TOL), n)
-    if not clusters:
-        return False, None, None
-
-    # Prefer classic "sitting on support": nearest level at or below close,
-    # allowing a small pierce within the band. Reject clearly broken levels.
     candidates: list[tuple[int, float, int, dict]] = []
-    for item in clusters:
-        level = item["price"]
+    for item in supports:
+        level = float(item["price"])
         if level <= 0:
             continue
-        dist = last_close / level - 1
-        if dist < -_BROKEN_BELOW:
+        half = zone_half_width(level, float(item.get("atr") or atr))
+        zone_low = level - half
+        zone_high = level + half
+        if last_close < zone_low or last_close > zone_high:
             continue
-        if dist < -_BAND_BELOW:
-            continue
-        if dist > _BAND_ABOVE:
-            continue
-        # Rank: support <= close first, then nearest, then more touches.
-        prefer = 0 if dist >= 0 else 1
-        candidates.append((prefer, abs(dist), -item["touches"], item))
+        # Prefer classic "sitting on support": close in upper half of zone, then nearest mid.
+        prefer = 0 if last_close >= level else 1
+        dist = abs(last_close - level) / level
+        candidates.append((prefer, dist, -int(item["touches"]), item))
 
     if not candidates:
         return False, None, None
 
     candidates.sort()
     best = candidates[0][3]
-    level = best["price"]
-    note = f"收市近支持約 {level:.2f}（觸及 {best['touches']}）"
-    flagged = {"price": level, "touches": best["touches"]}
+    level = float(best["price"])
+    half = zone_half_width(level, float(best.get("atr") or atr))
+    zone_low = level - half
+    zone_high = level + half
+    note = (
+        f"收市近支持約 {level:.2f}"
+        f"（區間 {zone_low:.2f}–{zone_high:.2f}，觸及 {best['touches']}）"
+    )
+    flagged = {
+        "price": level,
+        "touches": int(best["touches"]),
+        "zoneLow": zone_low,
+        "zoneHigh": zone_high,
+        "atr": float(best.get("atr") or atr),
+    }
     return True, note, flagged
-
-
-def _quality_supports(clusters: list[dict], bar_count: int) -> list[dict]:
-    """Keep multi-touch levels or a clear single swing not glued to the right edge."""
-    kept: list[dict] = []
-    edge = bar_count - SWING_WINDOW - 1
-    for item in clusters:
-        touches = item["touches"]
-        first_i = item["first_index"]
-        last_i = item["last_index"]
-        if touches >= 2:
-            if last_i - first_i >= _MIN_MULTI_AGE or touches >= 3:
-                kept.append(item)
-            continue
-        # Clear swing low (window-confirmed); skip if still forming at the edge.
-        if touches == 1 and last_i < edge:
-            kept.append(item)
-    return kept

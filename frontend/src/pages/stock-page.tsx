@@ -189,7 +189,7 @@ export function StockPage() {
               <p>
                 上方指數（SPY）陰陽燭 · 升紅跌綠 · {smaHint(chartInterval)} · 成交量 · 相對強度
                 RS（近一星期對 SPY）· MACD 樣式
-                {chartInterval === "1d" ? " · 虛線為支持／阻力" : ""}
+                {chartInterval === "1d" ? " · 虛線中軸為支持／阻力，淺虛線為 ±0.5×ATR 區間" : ""}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex gap-1" role="group" aria-label="圖表週期">
@@ -251,7 +251,14 @@ export function StockPage() {
           </section>
 
           {chartInterval === "1d" && row.closeAtSupport && row.closeAtSupportNote ? (
-            <p className="text-sm text-amber-700 dark:text-amber-400">{row.closeAtSupportNote}</p>
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              {row.closeAtSupportNote}
+              {typeof row.closeAtSupportZoneLow === "number" &&
+              typeof row.closeAtSupportZoneHigh === "number" &&
+              !String(row.closeAtSupportNote).includes("區間")
+                ? `（區間 ${formatPrice(row.closeAtSupportZoneLow)}–${formatPrice(row.closeAtSupportZoneHigh)}）`
+                : null}
+            </p>
           ) : null}
 
           {chartInterval === "1d" ? (
@@ -261,12 +268,17 @@ export function StockPage() {
                   <li key={`${level.kind}-${level.price}`} className="rounded-md border border-border px-2 py-1">
                     <span className="text-muted-foreground">{level.label}</span>
                     <span className="num ml-2">{formatPrice(level.price)}</span>
+                    {typeof level.zoneLow === "number" && typeof level.zoneHigh === "number" ? (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        區 {formatPrice(level.zoneLow)}–{formatPrice(level.zoneHigh)}
+                      </span>
+                    ) : null}
                     <span className="ml-2 text-xs text-muted-foreground">{level.touches} 次</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">近期擺動未夠密，未能標出可靠的支持或阻力。</p>
+              <p className="text-sm text-muted-foreground">近期未見足夠觸及（≥2）的結構高低位，未能標出可靠的支持或阻力。</p>
             )
           ) : (
             <p className="text-sm text-muted-foreground">支持／阻力僅在日線顯示；週線與小時圖顯示陰陽燭、均線、成交量與相對強度 RS（近一星期對 SPY）。資料點太少時會隱藏 RS 窗格。</p>
@@ -393,7 +405,7 @@ export function StockPicker() {
   return (
     <div className="mx-auto max-w-lg py-8">
       <h1 className="font-heading text-3xl font-semibold">個股詳情</h1>
-      <p className="mt-2 text-sm text-muted-foreground">從篩選結果選一隻股份，或輸入代號。圖表上方為 SPY 指數陰陽燭，中間為股價與50／150／200天線，下方為成交量，並標出近期擺動的支持與阻力。</p>
+      <p className="mt-2 text-sm text-muted-foreground">從篩選結果選一隻股份，或輸入代號。圖表上方為 SPY 指數陰陽燭，中間為股價與50／150／200天線，下方為成交量，並標出結構支持／阻力區（擺動＋近20／60日高低、≥2次觸及、±0.5×ATR）。</p>
       <Input
         className="mt-5"
         value={query}

@@ -292,6 +292,12 @@ class Engine:
             row["closeAtSupportNote"] = note
             row["closeAtSupportLevel"] = round(flagged["price"], 2) if flagged else None
             row["closeAtSupportTouches"] = int(flagged["touches"]) if flagged else None
+            row["closeAtSupportZoneLow"] = (
+                round(flagged["zoneLow"], 2) if flagged and flagged.get("zoneLow") is not None else None
+            )
+            row["closeAtSupportZoneHigh"] = (
+                round(flagged["zoneHigh"], 2) if flagged and flagged.get("zoneHigh") is not None else None
+            )
             row.pop("breakoutRetest", None)
             row.pop("breakoutRetestNote", None)
         meta = snapshot.setdefault("meta", {})
@@ -326,7 +332,7 @@ class Engine:
                 "industry": row.get("industryEn") or row.get("industry"),
             }
             fresh = evaluate(base, bars, quote, spy_bars)
-            for key in ("closeAtSupport", "closeAtSupportNote", "closeAtSupportLevel", "closeAtSupportTouches", "revenueGrowth", "earningsGrowth", "profitMargin"):
+            for key in ("closeAtSupport", "closeAtSupportNote", "closeAtSupportLevel", "closeAtSupportTouches", "closeAtSupportZoneLow", "closeAtSupportZoneHigh", "revenueGrowth", "earningsGrowth", "profitMargin"):
                 if key in row:
                     fresh[key] = row[key]
             updated.append(fresh)
@@ -422,6 +428,16 @@ class Engine:
             )
             detail_row["closeAtSupportTouches"] = (
                 int(flagged["touches"]) if flagged else None
+            )
+            detail_row["closeAtSupportZoneLow"] = (
+                round(flagged["zoneLow"], 2)
+                if flagged and flagged.get("zoneLow") is not None
+                else None
+            )
+            detail_row["closeAtSupportZoneHigh"] = (
+                round(flagged["zoneHigh"], 2)
+                if flagged and flagged.get("zoneHigh") is not None
+                else None
             )
             if matched and flagged:
                 levels = merge_flagged_support(levels, flagged)
