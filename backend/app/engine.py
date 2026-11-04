@@ -8,7 +8,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from app.config import COOLDOWN_SECONDS, LIMIT, TTL_HOURS, WORKERS
-from app.breakout_retest import detect_breakout_retest
+from app.breakout_retest import RULE_VERSION, detect_breakout_retest
 from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
 from app.levels import find_levels
@@ -142,6 +142,7 @@ class Engine:
                     "minDollarVolume": 30_000_000,
                     "minBeta": 1,
                     "nearHighWithin": 0.25,
+                    "breakoutRetestRuleVersion": RULE_VERSION,
                     "breadthBullish": 200,
                     "breadthCautiousBelow": 100,
                 },
@@ -162,7 +163,12 @@ class Engine:
         refresh = self.status()
         if snapshot is None:
             return {"ready": False, "stale": False, "meta": None, "rows": [], "refresh": refresh}
-        if any("breakoutRetest" not in row for row in snapshot["rows"]):
+        meta = snapshot.get("meta") or {}
+        criteria = meta.get("criteria") or {}
+        if (
+            any("breakoutRetest" not in row for row in snapshot["rows"])
+            or criteria.get("breakoutRetestRuleVersion") != RULE_VERSION
+        ):
             self._backfill_breakout_retest(snapshot)
         slim = []
         for row in snapshot["rows"]:
@@ -180,14 +186,15 @@ class Engine:
     def _backfill_breakout_retest(self, snapshot: dict) -> None:
         """Fill breakoutRetest on older cached rows from daily charts (one-shot)."""
         for row in snapshot["rows"]:
-            if "breakoutRetest" in row:
-                continue
             bars = store.load_chart(row["symbol"])
             matched, note = detect_breakout_retest(bars or [])
             row["breakoutRetest"] = matched
             row["breakoutRetestNote"] = note
+        meta = snapshot.setdefault("meta", {})
+        criteria = meta.setdefault("criteria", {})
+        criteria["breakoutRetestRuleVersion"] = RULE_VERSION
         store.save_snapshot(snapshot)
-        log.info("backfilled breakoutRetest on %s cached rows", len(snapshot["rows"]))
+        log.info("backfilled breakoutRetest v%s on %s cached rows", RULE_VERSION, len(snapshot["rows"]))
 
     def detail(self, symbol: str, interval: str = "1d") -> dict:
         symbol = normalize_symbol(symbol)

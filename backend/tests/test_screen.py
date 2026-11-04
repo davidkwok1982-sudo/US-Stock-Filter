@@ -281,43 +281,40 @@ def test_parse_wikipedia_styles_and_class_shares():
 
 
 def _breakout_retest_bars() -> list[dict]:
-    """Synthetic daily bars: resistance ~100, breakout, then retest."""
+    """Synthetic daily bars: multi-touch resistance ~100, breakout, extension, retest."""
     closes: list[float] = []
-    # Build ~120 bars oscillating under 100 to form swing highs at 100.
-    for cycle in range(6):
-        for phase in range(16):
-            if phase <= 8:
-                closes.append(88 + phase * 1.5)  # up toward ~100
+    # Long base below 100 with repeated approaches to the ceiling.
+    for _ in range(8):
+        for phase in range(12):
+            if phase <= 6:
+                closes.append(90 + phase * (10 / 6))
             else:
-                closes.append(100 - (phase - 8) * 1.5)
-    # Cap the swing peaks near 100.
-    for i, value in enumerate(closes):
-        if value > 100:
-            closes[i] = 100.0
-    # Breakout: climb and close clearly above 100.
-    for step in range(8):
-        closes.append(100.5 + step * 0.4)  # up to ~103.3
-    # Pull back to retest ~100.
-    for step in range(6):
-        closes.append(103.3 - step * 0.55)  # down toward ~100
-    # Hold above after retest.
+                closes.append(100 - (phase - 6) * 1.4)
+    # Cap peaks at or just under 100.
+    closes = [min(c, 99.6) for c in closes]
+    # Breakout: two+ closes clearly above 101.2, then extend to ~104.
+    for step in range(3):
+        closes.append(101.3 + step * 0.3)
     for step in range(5):
-        closes.append(100.2 + step * 0.3)
+        closes.append(102.2 + step * 0.4)  # up to ~104.2
+    # Pull back to retest ~100.
+    for step in range(5):
+        closes.append(104.0 - step * 0.75)  # toward ~100.25
+    # Hold above after retest.
+    for step in range(4):
+        closes.append(100.4 + step * 0.25)
 
     day = date(2025, 1, 2)
     bars = []
     for close in closes:
         while day.weekday() >= 5:
             day += timedelta(days=1)
-        # Shape highs/lows so swing highs cluster near 100 and retest tags it.
-        high = max(close * 1.01, close + 0.5)
-        low = min(close * 0.99, close - 0.5)
-        if 99.0 <= close <= 100.2:
-            high = max(high, 100.0)
+        high = close + 0.6
+        low = close - 0.6
         bars.append(
             {
                 "time": day.isoformat(),
-                "open": close * 0.998,
+                "open": close,
                 "high": high,
                 "low": low,
                 "close": close,
@@ -327,31 +324,25 @@ def _breakout_retest_bars() -> list[dict]:
         )
         day += timedelta(days=1)
 
-    # Force several clear swing highs at 100 before breakout.
-    # Find early segment peaks and pin high=100.
-    for index in range(6, len(bars) - 40):
-        if abs(bars[index]["close"] - 100) < 1.5 and bars[index]["close"] >= 98:
-            bars[index]["high"] = 100.0
-            bars[index]["close"] = min(bars[index]["close"], 99.5)
-
-    # Ensure breakout closes are clearly above 100.7.
-    # Last ~19 bars: breakout + retest + hold (see construction above).
-    # Find first bar with close > 101 in the last 40 and boost a couple.
-    for index, bar in enumerate(bars):
-        if bar["close"] >= 101:
-            bar["close"] = max(bar["close"], 101.2)
-            bar["high"] = max(bar["high"], bar["close"] * 1.005)
-            break
-    # Retest: set a recent low that tags 100.
-    for index in range(len(bars) - 12, len(bars) - 3):
+    # Pin several early swing highs exactly at 100.
+    pinned = 0
+    for index in range(5, len(bars) - 30):
+        if bars[index]["close"] >= 98.5 and bars[index]["close"] <= 99.6:
+            # local peak-ish
+            if index >= 5 and bars[index]["close"] >= bars[index - 1]["close"]:
+                bars[index]["high"] = 100.0
+                bars[index]["close"] = 99.4
+                pinned += 1
+    # Retest bar: tag 100 with the low.
+    for index in range(len(bars) - 10, len(bars) - 2):
         if bars[index]["close"] <= 101.5:
-            bars[index]["low"] = 99.6
-            bars[index]["close"] = max(bars[index]["close"], 100.1)
+            bars[index]["low"] = 99.5
+            bars[index]["close"] = 100.3
+            bars[index]["high"] = 101.0
             break
-    # Last close holds above.
-    bars[-1]["close"] = 101.5
-    bars[-1]["low"] = 100.8
-    bars[-1]["high"] = 102.0
+    bars[-1]["close"] = 101.2
+    bars[-1]["low"] = 100.6
+    bars[-1]["high"] = 101.8
     return bars
 
 
