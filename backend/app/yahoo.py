@@ -320,9 +320,37 @@ class YahooClient:
         pe = _raw(stats.get("trailingPE"))
         if pe is not None and (pe <= 0 or pe > 5000):
             pe = None
+        employees = profile.get("fullTimeEmployees")
+        if isinstance(employees, bool) or not isinstance(employees, (int, float)):
+            employees = None
+        else:
+            employees = int(employees)
+            if employees <= 0:
+                employees = None
+        def _text(value) -> str | None:
+            if not isinstance(value, str):
+                return None
+            cleaned = value.strip()
+            return cleaned or None
+
+        website = _text(profile.get("website"))
+        city = _text(profile.get("city"))
+        state = _text(profile.get("state"))
+        country = _text(profile.get("country"))
+        phone = _text(profile.get("phone"))
+        summary = _text(profile.get("longBusinessSummary"))
+        hq_parts = [part for part in (city, state, country) if part]
         return {
             "sector": profile.get("sector") or None,
             "industry": profile.get("industry") or None,
+            "summary": summary,
+            "website": website,
+            "employees": employees,
+            "city": city,
+            "state": state,
+            "country": country,
+            "phone": phone,
+            "hq": ", ".join(hq_parts) if hq_parts else None,
             "revenueGrowth": _raw(financials.get("revenueGrowth")),
             "earningsGrowth": _raw(financials.get("earningsGrowth")),
             "profitMargin": _raw(financials.get("profitMargins")),

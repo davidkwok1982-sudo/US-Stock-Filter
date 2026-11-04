@@ -273,6 +273,7 @@ class Engine:
             )
         fundamentals = self._fundamentals(symbol)
         detail_row = dict(row)
+        profile = None
         if fundamentals:
             if fundamentals.get("sector"):
                 detail_row["sectorEn"] = fundamentals["sector"]
@@ -285,6 +286,27 @@ class Engine:
             detail_row["profitMargin"] = fundamentals.get("profitMargin")
             if fundamentals.get("pe") and not detail_row.get("pe"):
                 detail_row["pe"] = fundamentals["pe"]
+            sector_en = fundamentals.get("sector") or detail_row.get("sectorEn")
+            industry_en = fundamentals.get("industry") or detail_row.get("industryEn")
+            sector_label = detail_row.get("sector")
+            industry_label = detail_row.get("industry")
+            profile = {
+                "summary": fundamentals.get("summary"),
+                "sector": sector_label,
+                "industry": industry_label,
+                "sectorZh": sector_label,
+                "industryZh": industry_label,
+                "sectorEn": sector_en,
+                "industryEn": industry_en,
+                "website": fundamentals.get("website"),
+                "employees": fundamentals.get("employees"),
+                "hq": fundamentals.get("hq"),
+                "city": fundamentals.get("city"),
+                "state": fundamentals.get("state"),
+                "country": fundamentals.get("country"),
+                "phone": fundamentals.get("phone"),
+                "source": "Yahoo Finance public quoteSummary (assetProfile)",
+            }
         # Support/resistance from the displayed series; SMA50/200 are bar windows on that series
         # (days / weeks / hours), matching the current daily behaviour.
         levels = find_levels(bars) if interval == "1d" else []
@@ -298,12 +320,15 @@ class Engine:
             "index": _index_series(spy, symbol="SPY", label="標普500（SPY）"),
             "levels": levels,
             "notes": notes,
+            "profile": profile,
             "meta": None if snapshot is None else snapshot["meta"],
         }
 
     def _fundamentals(self, symbol: str) -> dict | None:
         cached = store.load_fundamentals(symbol)
-        if cached and cached.get("updatedAt"):
+        # Older cache rows lack company-profile keys; refetch once so detail can show summary.
+        cache_has_profile = bool(cached) and "summary" in cached
+        if cached and cache_has_profile and cached.get("updatedAt"):
             stamp = datetime.fromisoformat(cached["updatedAt"])
             if stamp.tzinfo is None:
                 stamp = stamp.replace(tzinfo=timezone.utc)

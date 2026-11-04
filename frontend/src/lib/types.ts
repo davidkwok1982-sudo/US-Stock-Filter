@@ -150,6 +150,24 @@ export type IndexSeries = {
   bars?: Bar[]
 }
 
+export type CompanyProfile = {
+  summary: string | null
+  sector: string | null
+  industry: string | null
+  sectorZh: string | null
+  industryZh: string | null
+  sectorEn: string | null
+  industryEn: string | null
+  website: string | null
+  employees: number | null
+  hq: string | null
+  city: string | null
+  state: string | null
+  country: string | null
+  phone: string | null
+  source?: string | null
+}
+
 export type StockDetail = {
   row: ScreenRow
   /** Selected chart timeframe; defaults to 1d when older API omits it. */
@@ -165,6 +183,8 @@ export type StockDetail = {
     disclaimer: string
     disclaimerLong: string
   }
+  /** Company intro from Yahoo assetProfile; null when unavailable. */
+  profile?: CompanyProfile | null
   meta: ScreenMeta | null
 }
 

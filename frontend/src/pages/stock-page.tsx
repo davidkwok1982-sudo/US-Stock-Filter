@@ -18,7 +18,7 @@ import {
   toneClass,
 } from "@/lib/format.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
-import type { ChartInterval, StockDetail } from "@/lib/types.ts"
+import type { ChartInterval, CompanyProfile, StockDetail } from "@/lib/types.ts"
 
 type RangeKey = "6m" | "1y" | "2y" | "5d" | "10d" | "60d"
 
@@ -45,6 +45,7 @@ export function StockPage() {
   const [loading, setLoading] = useState(true)
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1d")
   const [range, setRange] = useState<RangeKey>("1y")
+  const [summaryOpen, setSummaryOpen] = useState(false)
 
   useEffect(() => {
     const cleaned = symbol.trim().toUpperCase()
@@ -53,6 +54,7 @@ export function StockPage() {
     setLoading(true)
     setError(null)
     setDetail(null)
+    setSummaryOpen(false)
     fetchStock(cleaned, chartInterval)
       .then((next) => {
         if (stop) return
@@ -142,6 +144,8 @@ export function StockPage() {
           {row.failReasons.length > 0 ? (
             <p className="text-sm text-muted-foreground">未過：{row.failReasons.join("、")}</p>
           ) : null}
+
+          {detail.profile ? <CompanyProfileCard profile={detail.profile} summaryOpen={summaryOpen} onToggleSummary={() => setSummaryOpen((v) => !v)} /> : null}
 
           <section className="overflow-hidden rounded-xl bg-chart text-white">
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-[#d9d2c5]">
@@ -331,6 +335,108 @@ export function StockPicker() {
         {matches.length === 0 ? <li className="py-6 text-sm text-muted-foreground">沒有符合的通過股份。若快取仍在更新，請稍後再搜。</li> : null}
       </ul>
     </div>
+  )
+}
+
+
+function CompanyProfileCard({
+  profile,
+  summaryOpen,
+  onToggleSummary,
+}: {
+  profile: CompanyProfile
+  summaryOpen: boolean
+  onToggleSummary: () => void
+}) {
+  const sectorZh = profile.sectorZh ?? profile.sector
+  const industryZh = profile.industryZh ?? profile.industry
+  const sectorLine =
+    sectorZh && profile.sectorEn && sectorZh !== profile.sectorEn
+      ? `${sectorZh}（${profile.sectorEn}）`
+      : sectorZh || profile.sectorEn || "—"
+  const industryLine =
+    industryZh && profile.industryEn && industryZh !== profile.industryEn
+      ? `${industryZh}（${profile.industryEn}）`
+      : industryZh || profile.industryEn || "—"
+  const summary = profile.summary?.trim() || ""
+  const longSummary = summary.length > 320
+  const websiteHref = profile.website
+    ? profile.website.startsWith("http")
+      ? profile.website
+      : `https://${profile.website}`
+    : null
+  const employees =
+    profile.employees == null
+      ? null
+      : profile.employees.toLocaleString("zh-Hant")
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="font-heading text-xl">公司資料</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm leading-relaxed">
+        <dl className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <dt className="text-xs text-muted-foreground">板塊</dt>
+            <dd className="mt-0.5">{sectorLine}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">行業</dt>
+            <dd className="mt-0.5">{industryLine}</dd>
+          </div>
+          {employees ? (
+            <div>
+              <dt className="text-xs text-muted-foreground">員工數</dt>
+              <dd className="mt-0.5 num">{employees}</dd>
+            </div>
+          ) : null}
+          {profile.hq ? (
+            <div>
+              <dt className="text-xs text-muted-foreground">總部</dt>
+              <dd className="mt-0.5">{profile.hq}</dd>
+            </div>
+          ) : null}
+          {websiteHref ? (
+            <div className="sm:col-span-2">
+              <dt className="text-xs text-muted-foreground">官網</dt>
+              <dd className="mt-0.5">
+                <a
+                  href={websiteHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-brass underline-offset-2 hover:underline break-all"
+                >
+                  {profile.website}
+                </a>
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+        {summary ? (
+          <div>
+            <p className="text-xs tracking-[0.16em] text-muted-foreground">公司簡介</p>
+            <p className={`mt-2 whitespace-pre-wrap ${summaryOpen || !longSummary ? "" : "line-clamp-6"}`}>
+              {summary}
+            </p>
+            {longSummary ? (
+              <button
+                type="button"
+                className="mt-2 text-xs font-medium text-brass hover:underline"
+                onClick={onToggleSummary}
+              >
+                {summaryOpen ? "顯示較少" : "顯示更多"}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-muted-foreground">暫無公司簡介。</p>
+        )}
+        <p className="border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
+          資料來自 Yahoo Finance 公開接口，可能落後或不全。僅供參考，不構成投資建議。
+        </p>
+      </CardContent>
+    </Card>
   )
 }
 
