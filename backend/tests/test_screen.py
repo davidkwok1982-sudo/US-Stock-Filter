@@ -331,17 +331,21 @@ File Creation Time: 1104202607:00|||||||
 
 
 def _close_at_support_bars() -> list[dict]:
+    """Synthetic multi-touch support near 100 that survives swing window=8."""
     closes: list[float] = []
-    for _ in range(6):
-        closes.extend([100.0, 101.5, 103.0, 105.0, 107.0, 105.5, 103.5, 102.0, 101.0, 100.2])
-    closes.extend([102.0, 104.0, 106.0, 104.0, 102.0, 100.5])
+    # Rise-fall cycles with a clear trough at 100, spaced > 2*window apart.
+    cycle = [100.0, 101.0, 102.5, 104.0, 106.0, 108.0, 107.0, 105.5, 104.0, 103.0, 102.0, 101.2, 100.8, 100.4, 100.2, 100.1, 100.0, 100.5, 101.5, 103.0]
+    for _ in range(5):
+        closes.extend(cycle)
+    # Finish sitting just above support.
+    closes.extend([101.0, 102.0, 103.0, 102.0, 101.0, 100.5])
 
     day = date(2025, 1, 2)
     bars = []
     for close in closes:
         while day.weekday() >= 5:
             day += timedelta(days=1)
-        low = close - 0.4
+        low = close - 0.35
         if abs(close - 100.0) < 0.05:
             low = 100.0
         bars.append(
@@ -366,11 +370,19 @@ def _close_at_support_bars() -> list[dict]:
 
 def test_close_at_support_detects_synthetic_pattern():
     from app.close_at_support import detect_close_at_support
+    from app.levels import find_levels, merge_flagged_support
+    from app.swings import SWING_WINDOW
 
     bars = _close_at_support_bars()
-    matched, note = detect_close_at_support(bars)
+    matched, note, flagged = detect_close_at_support(bars)
     assert matched is True
     assert note is not None
+    assert flagged is not None
+    assert flagged["price"] > 0
+    assert SWING_WINDOW == 8
+    levels = merge_flagged_support(find_levels(bars), flagged)
+    supports = [item for item in levels if item["kind"] == "support"]
+    assert any(abs(item["price"] - flagged["price"]) / flagged["price"] < 0.015 for item in supports)
 
 
 def test_close_at_support_false_when_far_above():
@@ -378,9 +390,10 @@ def test_close_at_support_false_when_far_above():
 
     closes = [50 + i * 0.15 for i in range(200)]
     bars = _bars(date(2024, 1, 2), closes)
-    matched, note = detect_close_at_support(bars)
+    matched, note, flagged = detect_close_at_support(bars)
     assert matched is False
     assert note is None
+    assert flagged is None
 
 
 def test_close_at_support_false_when_clearly_broken():
@@ -390,10 +403,48 @@ def test_close_at_support_false_when_clearly_broken():
     bars[-1]["close"] = 96.0
     bars[-1]["low"] = 95.5
     bars[-1]["high"] = 96.5
-    matched, note = detect_close_at_support(bars)
+    matched, note, flagged = detect_close_at_support(bars)
     assert matched is False
     assert note is None
+    assert flagged is None
 
+
+
+
+def test_close_at_support_ignores_weak_window6_only_swing():
+    """PGNY fixture: window-6-only 29.93 low must not pass under unified window=8."""
+    import json
+    from pathlib import Path
+
+    from app.close_at_support import detect_close_at_support
+    from app.levels import find_levels
+    from app.swings import SWING_WINDOW, swing_extrema, SEGMENT
+
+    bars = json.loads((Path(__file__).parent / "fixtures" / "pgny_daily.json").read_text())
+    segment = bars[-SEGMENT:]
+    lows6 = swing_extrema(segment, window=6, kind="low")
+    lows8 = swing_extrema(segment, window=SWING_WINDOW, kind="low")
+    assert any(abs(price - 29.93) < 0.01 for _, price in lows6)
+    assert all(abs(price - 29.93) > 0.01 for _, price in lows8)
+
+    matched, note, flagged = detect_close_at_support(bars)
+    assert matched is False
+    assert flagged is None
+    supports = [item for item in find_levels(bars) if item["kind"] == "support"]
+    assert all(abs(item["price"] - 29.93) > 0.05 for item in supports)
+
+
+
+def test_merge_flagged_support_inserts_missing_level():
+    from app.levels import merge_flagged_support
+
+    levels = [
+        {"price": 25.24, "kind": "support", "touches": 2, "label": "支持"},
+        {"price": 33.0, "kind": "resistance", "touches": 1, "label": "阻力"},
+    ]
+    merged = merge_flagged_support(levels, {"price": 29.93, "touches": 1})
+    supports = [item for item in merged if item["kind"] == "support"]
+    assert any(item["price"] == 29.93 and item["label"] == "收市近支持" for item in supports)
 
 def test_evaluate_includes_close_at_support_flag():
     stock_bars, spy_bars = _uptrend_pair()

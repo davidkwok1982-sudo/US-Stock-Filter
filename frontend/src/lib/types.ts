@@ -45,6 +45,8 @@ export type ScreenRow = {
   nearHigh: boolean
   closeAtSupport: boolean
   closeAtSupportNote?: string | null
+  closeAtSupportLevel?: number | null
+  closeAtSupportTouches?: number | null
   ret1w?: number | null
   ret3m: number | null
   ret6m: number | null

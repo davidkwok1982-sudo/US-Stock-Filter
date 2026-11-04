@@ -12,7 +12,7 @@ from app.config import CHUNK_SIZE, COOLDOWN_SECONDS, LIMIT, TTL_HOURS, WORKERS
 from app.close_at_support import RULE_VERSION, detect_close_at_support
 from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
-from app.levels import find_levels
+from app.levels import find_levels, merge_flagged_support
 from app.metrics import SCORE_RULE_VERSION, SMA_FAST, SMA_MID, SMA_SLOW, breadth, rolling_sma
 from app.notes import build_notes
 from app import store
@@ -287,9 +287,11 @@ class Engine:
         """Fill closeAtSupport on older cached rows from daily charts (one-shot)."""
         for row in snapshot["rows"]:
             bars = store.load_chart(row["symbol"])
-            matched, note = detect_close_at_support(bars or [])
+            matched, note, flagged = detect_close_at_support(bars or [])
             row["closeAtSupport"] = matched
             row["closeAtSupportNote"] = note
+            row["closeAtSupportLevel"] = round(flagged["price"], 2) if flagged else None
+            row["closeAtSupportTouches"] = int(flagged["touches"]) if flagged else None
             row.pop("breakoutRetest", None)
             row.pop("breakoutRetestNote", None)
         meta = snapshot.setdefault("meta", {})
@@ -324,7 +326,7 @@ class Engine:
                 "industry": row.get("industryEn") or row.get("industry"),
             }
             fresh = evaluate(base, bars, quote, spy_bars)
-            for key in ("closeAtSupport", "closeAtSupportNote", "revenueGrowth", "earningsGrowth", "profitMargin"):
+            for key in ("closeAtSupport", "closeAtSupportNote", "closeAtSupportLevel", "closeAtSupportTouches", "revenueGrowth", "earningsGrowth", "profitMargin"):
                 if key in row:
                     fresh[key] = row[key]
             updated.append(fresh)
@@ -411,6 +413,18 @@ class Engine:
         fundamentals = self._fundamentals(symbol, allow_network=False)
         detail_row, profile = self._detail_row_and_profile(row, fundamentals)
         levels = find_levels(bars) if interval == "1d" else []
+        if interval == "1d":
+            matched, note, flagged = detect_close_at_support(bars)
+            detail_row["closeAtSupport"] = matched
+            detail_row["closeAtSupportNote"] = note
+            detail_row["closeAtSupportLevel"] = (
+                round(flagged["price"], 2) if flagged else None
+            )
+            detail_row["closeAtSupportTouches"] = (
+                int(flagged["touches"]) if flagged else None
+            )
+            if matched and flagged:
+                levels = merge_flagged_support(levels, flagged)
         notes = build_notes(detail_row, levels)
         if fundamentals is None:
             profile_pending = True

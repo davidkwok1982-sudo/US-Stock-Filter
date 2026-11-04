@@ -140,7 +140,7 @@ def evaluate(
     stacked = bool(stack_ok)
     slope_up = bool(slopes_ok)
     near_high = bool(drawdown is not None and drawdown >= -NEAR_HIGH_WITHIN)
-    close_at_support, close_at_support_note = detect_close_at_support(bars)
+    close_at_support, close_at_support_note, close_at_support_level = detect_close_at_support(bars)
     score, parts = build_score(
         distance200=distance200,
         above50=above50,
@@ -186,6 +186,12 @@ def evaluate(
         "nearHigh": near_high,
         "closeAtSupport": close_at_support,
         "closeAtSupportNote": close_at_support_note,
+        "closeAtSupportLevel": (
+            round(close_at_support_level["price"], 2) if close_at_support_level else None
+        ),
+        "closeAtSupportTouches": (
+            int(close_at_support_level["touches"]) if close_at_support_level else None
+        ),
         "ret1w": ret1w,
         "ret3m": ret3,
         "ret6m": ret6,

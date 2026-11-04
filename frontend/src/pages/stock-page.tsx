@@ -250,6 +250,10 @@ export function StockPage() {
             )}
           </section>
 
+          {chartInterval === "1d" && row.closeAtSupport && row.closeAtSupportNote ? (
+            <p className="text-sm text-amber-700 dark:text-amber-400">{row.closeAtSupportNote}</p>
+          ) : null}
+
           {chartInterval === "1d" ? (
             detail.levels.length > 0 ? (
               <ul className="flex flex-wrap gap-2 text-sm">

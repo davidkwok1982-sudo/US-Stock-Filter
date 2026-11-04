@@ -13,7 +13,7 @@ import type { Filters, SortKey } from "@/lib/types.ts"
 
 const TOGGLES: { key: keyof Filters; label: string; hint: string }[] = [
   { key: "rs", label: "跑贏 SPY", hint: "近一星期回報高於 SPY（約5個交易日）" },
-  { key: "support", label: "收市近支持", hint: "最新收市價剛好落在近期擺動支持位附近（約 ±1%），允許輕微刺穿但未明顯跌破" },
+  { key: "support", label: "收市近支持", hint: "最新收市價剛好落在近期擺動支持位附近（上最多 +1.2%、下最多 −1.0%），允許輕微刺穿但未明顯跌破；與圖表支持位同一擺動定義" },
 ]
 
 export function ScreenPage() {

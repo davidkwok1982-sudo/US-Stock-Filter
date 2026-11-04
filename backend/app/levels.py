@@ -1,51 +1,19 @@
-"""Approximate support and resistance from recent swing highs and lows."""
+"""Approximate support and resistance from recent swing highs and lows.
+
+Swing window / clustering MUST match ``close_at_support`` (via ``swings``).
+"""
 
 from __future__ import annotations
 
-
-def _clusters(points: list[tuple[int, float]], tolerance: float = 0.012) -> list[dict]:
-    if not points:
-        return []
-    ordered = sorted(points, key=lambda item: item[1])
-    groups: list[list[tuple[int, float]]] = [[ordered[0]]]
-    for index, price in ordered[1:]:
-        prices = [item[1] for item in groups[-1]]
-        anchor = sorted(prices)[len(prices) // 2]
-        if anchor and abs(price - anchor) / anchor <= tolerance:
-            groups[-1].append((index, price))
-        else:
-            groups.append([(index, price)])
-    clusters = []
-    for group in groups:
-        prices = sorted(item[1] for item in group)
-        indexes = [item[0] for item in group]
-        median = prices[len(prices) // 2]
-        clusters.append(
-            {
-                "price": median,
-                "touches": len(group),
-                "lastIndex": max(indexes),
-            }
-        )
-    return clusters
+from app.swings import CLUSTER_TOL, SEGMENT, SWING_WINDOW, cluster, swing_extrema
 
 
-def find_levels(bars: list[dict], window: int = 8) -> list[dict]:
+def find_levels(bars: list[dict], window: int = SWING_WINDOW) -> list[dict]:
     if len(bars) < window * 2 + 5:
         return []
-    segment = bars[-189:]
-    count = len(segment)
-    highs: list[tuple[int, float]] = []
-    lows: list[tuple[int, float]] = []
-    for index in range(window, count - window):
-        high = segment[index]["high"]
-        low = segment[index]["low"]
-        left = index - window
-        right = index + window + 1
-        if high >= max(bar["high"] for bar in segment[left:right]):
-            highs.append((index, high))
-        if low <= min(bar["low"] for bar in segment[left:right]):
-            lows.append((index, low))
+    segment = bars[-SEGMENT:]
+    highs = swing_extrema(segment, window=window, kind="high")
+    lows = swing_extrema(segment, window=window, kind="low")
 
     last = segment[-1]["close"]
     lookback = bars[-252:] if len(bars) > 252 else bars
@@ -53,20 +21,20 @@ def find_levels(bars: list[dict], window: int = 8) -> list[dict]:
 
     def choose(points: list[tuple[int, float]], kind: str) -> list[dict]:
         ranked = sorted(
-            _clusters(points),
+            cluster(points, CLUSTER_TOL),
             key=lambda item: (item["touches"], item["lastIndex"]),
             reverse=True,
         )
         picked: list[dict] = []
-        for cluster in ranked:
-            price = cluster["price"]
+        for item in ranked:
+            price = item["price"]
             if kind == "support" and price >= last * 0.997:
                 continue
             if kind == "resistance" and price <= last * 1.003:
                 continue
-            if any(abs(price - item["price"]) / price < 0.015 for item in picked):
+            if any(abs(price - other["price"]) / price < 0.015 for other in picked):
                 continue
-            touches = cluster["touches"]
+            touches = item["touches"]
             if kind == "support":
                 label = "支持帶" if touches >= 3 else "支持"
             else:
@@ -97,3 +65,42 @@ def find_levels(bars: list[dict], window: int = 8) -> list[dict]:
     supports = sorted((item for item in levels if item["kind"] == "support"), key=lambda item: -item["price"])
     resistance = sorted((item for item in levels if item["kind"] == "resistance"), key=lambda item: item["price"])
     return supports[:3] + resistance[:3]
+
+
+def merge_flagged_support(levels: list[dict], flagged: dict | None) -> list[dict]:
+    """Ensure the close-at-support level appears on the chart even if not top-3."""
+    if not flagged:
+        return levels
+    raw = flagged.get("price")
+    if raw is None:
+        return levels
+    price = round(float(raw), 2)
+    if price <= 0:
+        return levels
+    touches = int(flagged.get("touches") or 1)
+    label = "收市近支持帶" if touches >= 3 else "收市近支持"
+
+    supports = [dict(item) for item in levels if item["kind"] == "support"]
+    resistance = [item for item in levels if item["kind"] == "resistance"]
+
+    for item in supports:
+        if abs(item["price"] - price) / price < 0.015:
+            item["price"] = price
+            item["touches"] = max(int(item.get("touches") or 1), touches)
+            item["label"] = label
+            return sorted(supports, key=lambda entry: -entry["price"]) + resistance
+
+    supports.append(
+        {
+            "price": price,
+            "kind": "support",
+            "touches": touches,
+            "label": label,
+        }
+    )
+    # Keep flagged + up to 2 other supports (may exceed prior top-3).
+    supports = sorted(supports, key=lambda entry: -entry["price"])
+    flagged_item = next(item for item in supports if abs(item["price"] - price) / price < 1e-9)
+    others = [item for item in supports if item is not flagged_item]
+    picked = [flagged_item] + others[:2]
+    return sorted(picked, key=lambda entry: -entry["price"]) + resistance
