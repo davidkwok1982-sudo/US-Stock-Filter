@@ -302,6 +302,7 @@ def test_parse_nasdaq_and_other_listed_filters_adr_etf():
 AAPL|Apple Inc. - Common Stock|Q|N|N|100|N|N
 SPY|SPDR S&P 500 ETF Trust|G|N|N|100|Y|N
 AACG|ATA Creativity Global - American Depositary Shares|S|N|N|100|N|N
+ASML|ASML Holding N.V. - New York Registry Shares|Q|N|N|100|N|N
 ZZZT|NASDAQ TEST STOCK|G|Y|N|100|N|N
 File Creation Time: 1104202607:00|||||||
 """
@@ -309,6 +310,7 @@ File Creation Time: 1104202607:00|||||||
 BRK.B|Berkshire Hathaway Inc. Class B Common Stock|N|BRK.B|N|100|N|BRK-B
 QQQ|Invesco QQQ Trust, Series 1|P|QQQ|Y|100|N|QQQ
 BABA|Alibaba Group Holding Limited American Depositary Shares|N|BABA|N|100|N|BABA
+TSM|Taiwan Semiconductor Manufacturing Company Ltd.|N|TSM|N|40|N|TSM
 IBM|International Business Machines Corporation Common Stock|N|IBM|N|100|N|IBM
 File Creation Time: 1104202607:00|||||||
 """
@@ -323,6 +325,8 @@ File Creation Time: 1104202607:00|||||||
     assert "QQQ" not in symbols
     assert "AACG" not in symbols
     assert "BABA" not in symbols
+    assert "TSM" not in symbols
+    assert "ASML" not in symbols
     assert "ZZZT" not in symbols
 
 

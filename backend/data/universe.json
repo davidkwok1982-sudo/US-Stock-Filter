@@ -1063,16 +1063,6 @@
       "venue": "amex"
     },
     {
-      "symbol": "AEG",
-      "name": "Aegon Ltd. New York Registry Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "AEHL",
       "name": "Antelope Enterprise Holdings Limited - Class A Ordinary Shares",
       "sector": null,
@@ -1521,16 +1511,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "AGRO",
-      "name": "Adecoagro S.A. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "AGRZ",
@@ -3243,16 +3223,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "AOSL",
-      "name": "Alpha and Omega Semiconductor Limited - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "AOUT",
       "name": "American Outdoor Brands, Inc. - Common Stock",
       "sector": null,
@@ -3515,16 +3485,6 @@
     {
       "symbol": "APVO",
       "name": "Aptevo Therapeutics Inc. - Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "APWC",
-      "name": "Asia Pacific Wire & Cable Corporation Limited  - Common shares, Par value .01 per share",
       "sector": null,
       "industry": null,
       "groups": [
@@ -4033,16 +3993,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "ASA",
-      "name": "ASA  Gold and Precious Metals Limited",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "ASAN",
       "name": "Asana, Inc. Class A Common Stock",
       "sector": null,
@@ -4153,28 +4103,8 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "ASM",
-      "name": "Avino Silver & Gold Mines Ltd. Common Shares (Canada)",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
-    },
-    {
       "symbol": "ASMB",
       "name": "Assembly Biosciences, Inc. - Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "ASML",
-      "name": "ASML Holding N.V. - New York Registry Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -5013,16 +4943,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "AVX",
-      "name": "Avax One Technology Ltd. - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "AVXL",
       "name": "Anavex Life Sciences Corp. - Common Stock",
       "sector": null,
@@ -5221,16 +5141,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "AXTA",
-      "name": "Axalta Coating Systems Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "AXTI",
@@ -5465,16 +5375,6 @@
     {
       "symbol": "BALY",
       "name": "Bally's Corporation Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "BAM",
-      "name": "Brookfield Asset Management Inc Class A Limited Voting Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -6003,16 +5903,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "BCV",
-      "name": "Bancroft Fund, Ltd.",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
-    },
-    {
       "symbol": "BCX",
       "name": "BlackRock Resources Common Shares of Beneficial Interest",
       "sector": null,
@@ -6373,16 +6263,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "BG",
-      "name": "Bunge Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "BGB",
       "name": "Blackstone Strategic Credit 2027 Term Fund Common Shares of Beneficial Interest",
       "sector": null,
@@ -6651,16 +6531,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "BHVN",
-      "name": "Biohaven Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "BIAF",
@@ -7173,16 +7043,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "BLW",
-      "name": "Blackrock Limited Duration Income Trust",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "BLX",
       "name": "Bladex, Inc. Class E Common Stock",
       "sector": null,
@@ -7383,16 +7243,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "BN",
-      "name": "Brookfield Corporation Class A Limited Voting Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "BNAI",
       "name": "Brand Engagement Network Inc. - Common Stock",
       "sector": null,
@@ -7455,16 +7305,6 @@
     {
       "symbol": "BNS",
       "name": "Bank Nova Scotia Halifax Pfd 3 Ordinary Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "BNT",
-      "name": "Brookfield Wealth Solutions Ltd. Class A Exchangeable Limited Voting Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -7605,16 +7445,6 @@
     {
       "symbol": "BOOT",
       "name": "Boot Barn Holdings, Inc. Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "BORR",
-      "name": "Borr Drilling Limited Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -7765,16 +7595,6 @@
     {
       "symbol": "BRAI",
       "name": "Braiin Limited - Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "BRBI",
-      "name": "BRBI BR Partners S.A. - ADSs",
       "sector": null,
       "industry": null,
       "groups": [
@@ -8603,16 +8423,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "BWLP",
-      "name": "BW LPG Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "BWMN",
       "name": "Bowman Consulting Group Ltd. - Common Stock",
       "sector": null,
@@ -8775,16 +8585,6 @@
     {
       "symbol": "BYSI",
       "name": "BeyondSpring, Inc. - Ordinary Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "BZ",
-      "name": "KANZHUN LIMITED - American Depository Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -9665,16 +9465,6 @@
     {
       "symbol": "CCK",
       "name": "Crown Holdings, Inc.",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "CCL",
-      "name": "Carnival Corporation Ltd. Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -10623,16 +10413,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "CHT",
-      "name": "Chunghwa Telecom Co., Ltd.",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "CHTR",
       "name": "Charter Communications, Inc. - Class A Common Stock",
       "sector": null,
@@ -10645,16 +10425,6 @@
     {
       "symbol": "CHW",
       "name": "Calamos Global Dynamic Income Fund - Closed End Fund",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "CHWM",
-      "name": "Chilwa Minerals Limited - American Depository Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -11283,16 +11053,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "CMCL",
-      "name": "Caledonia Mining Corporation Plc Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
-    },
-    {
       "symbol": "CMCO",
       "name": "Columbus McKinnon Corporation - Common Stock",
       "sector": null,
@@ -11385,16 +11145,6 @@
     {
       "symbol": "CMPR",
       "name": "Cimpress plc - Ordinary Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "CMPS",
-      "name": "COMPASS Pathways Plc - American Depository Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -11541,16 +11291,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "CNH",
-      "name": "CNH Industrial N.V. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "CNI",
@@ -12143,16 +11883,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "CP",
-      "name": "Canadian Pacific Kansas City Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "CPA",
       "name": "Copa Holdings, S.A. Class A Common Stock",
       "sector": null,
@@ -12681,16 +12411,6 @@
         "us"
       ],
       "venue": "nyse"
-    },
-    {
-      "symbol": "CRSP",
-      "name": "CRISPR Therapeutics AG - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
     },
     {
       "symbol": "CRSR",
@@ -13583,16 +13303,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "CWK",
-      "name": "Cushman & Wakefield Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "CWST",
       "name": "Casella Waste Systems, Inc. - Class A Common Stock",
       "sector": null,
@@ -14133,16 +13843,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "DDI",
-      "name": "DoubleDown Interactive Co., Ltd. - American Depository Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "DDOG",
       "name": "Datadog, Inc. - Class A Common Stock",
       "sector": null,
@@ -14235,16 +13935,6 @@
     {
       "symbol": "DERM",
       "name": "Journey Medical Corporation - Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "DETX",
-      "name": "Liberty Defense Holdings, Ltd. - Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -15723,16 +15413,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "ECF",
-      "name": "Ellsworth Growth and Income Fund Ltd.",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
-    },
-    {
       "symbol": "ECG",
       "name": "Everus Construction Group, Inc. Common Stock",
       "sector": null,
@@ -15865,16 +15545,6 @@
     {
       "symbol": "EDIT",
       "name": "Editas Medicine, Inc. - Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "EDRY",
-      "name": "EuroDry Ltd. - Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -16045,16 +15715,6 @@
     {
       "symbol": "EFX",
       "name": "Equifax, Inc. Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "EFXT",
-      "name": "Enerflex Ltd Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -16455,16 +16115,6 @@
     {
       "symbol": "ELVN",
       "name": "Enliven Therapeutics, Inc.  - Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "ELVR",
-      "name": "Elevra Lithium Limited - American Depository Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -17003,16 +16653,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "EPSN",
-      "name": "Epsilon Energy Ltd. - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "EQ",
       "name": "Equillium, Inc. - Common Stock",
       "sector": null,
@@ -17183,16 +16823,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "EROK",
-      "name": "EagleRock Land, LLC Class A shares representing limited liability company interests",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "ES",
       "name": "Eversource Energy (D/B/A) Common Stock",
       "sector": null,
@@ -17271,16 +16901,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "ESNT",
-      "name": "Essent Group Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "ESOA",
@@ -17761,16 +17381,6 @@
         "us"
       ],
       "venue": "nyse"
-    },
-    {
-      "symbol": "EVV",
-      "name": "Eaton Vance Limited Duration Income Fund Common Shares of Beneficial Interest",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
     },
     {
       "symbol": "EW",
@@ -19323,16 +18933,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "FMST",
-      "name": "Foremost Clean Energy Ltd. - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "FMX",
       "name": "Fomento Economico Mexicano S.A.B. de C.V. Common Stock",
       "sector": null,
@@ -20053,16 +19653,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "FTF",
-      "name": "Franklin Limited Duration Income Trust Common Shares of Beneficial Interest",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
-    },
-    {
       "symbol": "FTFT",
       "name": "Future FinTech Group Inc. - Common Stock",
       "sector": null,
@@ -20281,16 +19871,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "FURY",
-      "name": "Fury Gold Mines Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
     },
     {
       "symbol": "FUSB",
@@ -21093,28 +20673,8 @@
       "venue": "nyse"
     },
     {
-      "symbol": "GFR",
-      "name": "Greenfire Resources Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "GFS",
       "name": "GlobalFoundries Inc. - Ordinary Share",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "GFUZ",
-      "name": "General Fusion Group Ltd. - Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -21583,16 +21143,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "GLNG",
-      "name": "Golar LNG Limited - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "GLO",
       "name": "Clough Global Opportunities Fund Common Stock",
       "sector": null,
@@ -21601,16 +21151,6 @@
         "us"
       ],
       "venue": "amex"
-    },
-    {
-      "symbol": "GLOB",
-      "name": "Globant S.A. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "GLOO",
@@ -22163,16 +21703,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "GPRK",
-      "name": "Geopark Ltd Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "GPRO",
       "name": "GoPro, Inc. - Class A Common Stock",
       "sector": null,
@@ -22633,16 +22163,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "GTES",
-      "name": "Gates Industrial Corporation Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "GTIM",
       "name": "Good Times Restaurants Inc. - Common Stock",
       "sector": null,
@@ -22771,16 +22291,6 @@
         "us"
       ],
       "venue": "nyse"
-    },
-    {
-      "symbol": "GVH",
-      "name": "Globavend Holdings Limited - Ord Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
     },
     {
       "symbol": "GWAV",
@@ -22913,16 +22423,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "HAFN",
-      "name": "Hafnia Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "HAIN",
       "name": "The Hain Celestial Group, Inc. - Common Stock",
       "sector": null,
@@ -22945,16 +22445,6 @@
     {
       "symbol": "HALO",
       "name": "Halozyme Therapeutics, Inc. - Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "HAO",
-      "name": "Haoxi Health Technology Limited - Class A Ord Share",
       "sector": null,
       "industry": null,
       "groups": [
@@ -23343,16 +22833,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "HESM",
-      "name": "Hess Midstream LP Class A Representing Limited Partner Interests",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "HFBL",
       "name": "Home Federal Bancorp, Inc. of Louisiana - Common Stock",
       "sector": null,
@@ -23563,16 +23043,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "HIVE",
-      "name": "HIVE Digital Technologies Ltd - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "HIW",
       "name": "Highwoods Properties, Inc. Common Stock",
       "sector": null,
@@ -23605,16 +23075,6 @@
     {
       "symbol": "HL",
       "name": "Hecla Mining Company Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "HLF",
-      "name": "Herbalife Ltd. Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -23761,16 +23221,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "HMY",
-      "name": "Harmony Gold Mining Company Limited",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "HNGE",
@@ -24211,16 +23661,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "HSHP",
-      "name": "Himalaya Shipping Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "HSIC",
@@ -24825,16 +24265,6 @@
     {
       "symbol": "IBCP",
       "name": "Independent Bank Corporation - Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "IBEX",
-      "name": "IBEX Limited - Common Share",
       "sector": null,
       "industry": null,
       "groups": [
@@ -26563,16 +25993,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "ISOU",
-      "name": "IsoEnergy Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
-    },
-    {
       "symbol": "ISPC",
       "name": "iSpecimen Inc. - Common Stock",
       "sector": null,
@@ -26731,16 +26151,6 @@
         "us"
       ],
       "venue": "nyse"
-    },
-    {
-      "symbol": "IVA",
-      "name": "Inventiva S.A. - American Depository Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
     },
     {
       "symbol": "IVAI",
@@ -28283,16 +27693,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "KOS",
-      "name": "Kosmos Energy Ltd. Common Shares (DE)",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "KOSS",
       "name": "Koss Corporation - Common Stock",
       "sector": null,
@@ -28703,16 +28103,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "KYIV",
-      "name": "Kyivstar Group Ltd. - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "KYMR",
       "name": "Kymera Therapeutics, Inc. - Common Stock",
       "sector": null,
@@ -28865,16 +28255,6 @@
     {
       "symbol": "LANV",
       "name": "Lanvin Group Holdings Limited Ordinary Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "LAR",
-      "name": "Lithium Argentina AG Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -29983,16 +29363,6 @@
       "venue": "amex"
     },
     {
-      "symbol": "LOGI",
-      "name": "Logitech International S.A. - Registered Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "LONA",
       "name": "LeonaBio, Inc. - Common Stock",
       "sector": null,
@@ -30095,16 +29465,6 @@
     {
       "symbol": "LPG",
       "name": "Dorian LPG Ltd. Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "LPL",
-      "name": "LG Display Co, Ltd AMERICAN DEPOSITORY SHARES",
       "sector": null,
       "industry": null,
       "groups": [
@@ -31325,16 +30685,6 @@
     {
       "symbol": "MD",
       "name": "Pediatrix Medical Group, Inc. Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "MDA",
-      "name": "MDA Space Ltd. Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -33233,26 +32583,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "MT",
-      "name": "Arcelor Mittal NY Registry Shares NEW",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "MTA",
-      "name": "Metalla Royalty & Streaming Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
-    },
-    {
       "symbol": "MTAK",
       "name": "Market Technology Acquisition Corp - Class A Ordinary Shares",
       "sector": null,
@@ -34123,16 +33453,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "NBR",
-      "name": "Nabors Industries Ltd.",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "NBRG",
       "name": "Newbridge Acquisition Limited - Class A Ordinary Share",
       "sector": null,
@@ -34145,16 +33465,6 @@
     {
       "symbol": "NBTB",
       "name": "NBT Bancorp Inc. - Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "NBTX",
-      "name": "Nanobiotix S.A. - ADSs",
       "sector": null,
       "industry": null,
       "groups": [
@@ -34295,16 +33605,6 @@
     {
       "symbol": "NCT",
       "name": "Intercont (Cayman) Limited - Class A Ordinary shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "NCTY",
-      "name": "The9 Limited - American Depository Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -34561,16 +33861,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "NEXA",
-      "name": "Nexa Resources S.A. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "NEXM",
@@ -35233,16 +34523,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "NOA",
-      "name": "North American Construction Group Ltd. Common Shares (no par)",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "NOC",
       "name": "Northrop Grumman Corporation Common Stock",
       "sector": null,
@@ -35553,16 +34833,6 @@
       "venue": "amex"
     },
     {
-      "symbol": "NRP",
-      "name": "Natural Resource Partners LP Limited Partnership",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "NRSN",
       "name": "NeuroSense Therapeutics Ltd. - Ordinary Shares",
       "sector": null,
@@ -35801,16 +35071,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "NTR",
-      "name": "Nutrien Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "NTRA",
@@ -36173,16 +35433,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "NVX",
-      "name": "NOVONIX Limited - American Depository Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "NWAX",
       "name": "New America Acquisition I Corp. Class A Common Stock",
       "sector": null,
@@ -36335,16 +35585,6 @@
     {
       "symbol": "NXDT",
       "name": "NexPoint Diversified Real Estate Trust Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "NXE",
-      "name": "Nexgen Energy Ltd. Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -36593,16 +35833,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "OBE",
-      "name": "Obsidian Energy Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
-    },
-    {
       "symbol": "OBIO",
       "name": "Orchestra BioMed Holdings, Inc. - Ordinary Shares",
       "sector": null,
@@ -36801,16 +36031,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "OEC",
-      "name": "Orion S.A. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "OESX",
@@ -37893,16 +37113,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "OSW",
-      "name": "OneSpaWorld Holdings Limited - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "OTAI",
       "name": "Starlink AI Acquisition Corporation Ordinary Shares",
       "sector": null,
@@ -38173,16 +37383,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "PAC",
-      "name": "Grupo Aeroportuario Del Pacifico, S.A. B. de C.V. Grupo Aeroportuario Del Pacifico, S.A. de C.V. (each representing 10 Series B shares)",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "PACB",
       "name": "Pacific Biosciences of California, Inc. - Common Stock",
       "sector": null,
@@ -38231,16 +37431,6 @@
         "us"
       ],
       "venue": "nyse"
-    },
-    {
-      "symbol": "PAGP",
-      "name": "Plains GP Holdings, L.P. - Class A Shares representing limited partner interests",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
     },
     {
       "symbol": "PAGS",
@@ -38311,16 +37501,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "PAM",
-      "name": "Pampa Energia S.A.",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "PAMT",
@@ -38635,16 +37815,6 @@
     {
       "symbol": "PBLS",
       "name": "Parabilis Medicines, Inc. - Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "PBM",
-      "name": "Psyence Biomedical Ltd. - Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -39383,16 +38553,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "PHG",
-      "name": "Koninklijke Philips N.V. NY Registry Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "PHIN",
       "name": "PHINIA Inc. Common Stock",
       "sector": null,
@@ -39721,16 +38881,6 @@
         "us"
       ],
       "venue": "amex"
-    },
-    {
-      "symbol": "PLGO",
-      "name": "Pelagos Insurance Capital Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "PLMK",
@@ -40823,16 +39973,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "PSFE",
-      "name": "Paysafe Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "PSHG",
       "name": "Performance Shipping Inc. - Common Shares",
       "sector": null,
@@ -40925,16 +40065,6 @@
     {
       "symbol": "PSTL",
       "name": "Postal Realty Trust, Inc. Class A Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "PSUS",
-      "name": "Pershing Square USA, Ltd. Common Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -41383,16 +40513,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "QGEN",
-      "name": "Qiagen N.V. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "QH",
       "name": "Quhuo Limited - Class A Ordinary Shares",
       "sector": null,
@@ -41485,16 +40605,6 @@
     {
       "symbol": "QNT",
       "name": "Quantinuum Inc. - Class A Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "QNTM",
-      "name": "Quantum Biopharma Ltd. - Class B Subordinate Voting Shares",
       "sector": null,
       "industry": null,
       "groups": [
@@ -41761,16 +40871,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "RACE",
-      "name": "Ferrari N.V. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "RAIL",
@@ -43263,16 +42363,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "RNW",
-      "name": "ReNew Energy Global plc - Class A Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "RNXT",
       "name": "RenovoRx, Inc. - Common Stock",
       "sector": null,
@@ -43321,16 +42411,6 @@
         "us"
       ],
       "venue": "nyse"
-    },
-    {
-      "symbol": "ROIV",
-      "name": "Roivant Sciences Ltd. - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
     },
     {
       "symbol": "ROK",
@@ -43951,16 +43031,6 @@
         "us"
       ],
       "venue": "nyse"
-    },
-    {
-      "symbol": "RYOJ",
-      "name": "rYojbaba Co., Ltd. - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
     },
     {
       "symbol": "RYTM",
@@ -44673,16 +43743,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "SCZM",
-      "name": "Santacruz Silver Mining Ltd. - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "SD",
       "name": "SandRidge Energy, Inc. Common Stock",
       "sector": null,
@@ -44761,16 +43821,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "SDRL",
-      "name": "Seadrill Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "SEAT",
@@ -45051,16 +44101,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "SFL",
-      "name": "SFL Corporation Ltd",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "SFM",
@@ -45473,26 +44513,6 @@
       "venue": "amex"
     },
     {
-      "symbol": "SIFY",
-      "name": "Sify Technologies Limited - American Depository Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "SIG",
-      "name": "Signet Jewelers Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "SIGA",
       "name": "SIGA Technologies Inc. - Common Stock",
       "sector": null,
@@ -45653,16 +44673,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "SKE",
-      "name": "Skeena Resources Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "SKIL",
       "name": "Skillsoft Corp. Class A Common Stock",
       "sector": null,
@@ -45803,16 +44813,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "SLB",
-      "name": "SLB Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "SLBT",
       "name": "SL Science Holding Limited - Ordinary Shares",
       "sector": null,
@@ -45913,16 +44913,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "SLI",
-      "name": "Standard Lithium Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
-    },
-    {
       "symbol": "SLM",
       "name": "SLM Corporation - Common Stock",
       "sector": null,
@@ -45935,16 +44925,6 @@
     {
       "symbol": "SLMT",
       "name": "Solmate Infrastructure Public Limited Company - Class B Ordinary Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
-      "symbol": "SLN",
-      "name": "Silence Therapeutics Plc - American Depository Share",
       "sector": null,
       "industry": null,
       "groups": [
@@ -46863,16 +45843,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "SPNT",
-      "name": "SiriusPoint Ltd. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "SPOK",
       "name": "Spok Holdings, Inc. - Common Stock",
       "sector": null,
@@ -47115,16 +46085,6 @@
     {
       "symbol": "SRI",
       "name": "Stoneridge, Inc. Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "SRL",
-      "name": "Scully Royalty Ltd.",
       "sector": null,
       "industry": null,
       "groups": [
@@ -47561,16 +46521,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "STLA",
-      "name": "Stellantis N.V. Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "STLD",
@@ -48903,16 +47853,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "TEN",
-      "name": "Tsakos Energy Navigation Ltd Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "TENB",
       "name": "Tenable Holdings, Inc. - Common Stock",
       "sector": null,
@@ -49041,16 +47981,6 @@
         "us"
       ],
       "venue": "nyse"
-    },
-    {
-      "symbol": "TGB",
-      "name": "Trekor Metals Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "amex"
     },
     {
       "symbol": "TGE",
@@ -49503,16 +48433,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "TLSA",
-      "name": "Tiziana Life Sciences Ltd - Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "TLSI",
       "name": "TriSalus Life Sciences, Inc. - Common Stock",
       "sector": null,
@@ -49691,16 +48611,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "TNK",
-      "name": "Teekay Tankers Ltd.",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "TNL",
@@ -50473,16 +49383,6 @@
       "venue": "nyse"
     },
     {
-      "symbol": "TSM",
-      "name": "Taiwan Semiconductor Manufacturing Company Ltd.",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "TSN",
       "name": "Tyson Foods, Inc. Common Stock",
       "sector": null,
@@ -50511,16 +49411,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "TT",
-      "name": "Trane Technologies plc",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "TTAM",
@@ -51993,16 +50883,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "VAL",
-      "name": "Valaris Limited Common Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
       "symbol": "VALU",
       "name": "Value Line, Inc. - Common Stock",
       "sector": null,
@@ -52095,16 +50975,6 @@
     {
       "symbol": "VCV",
       "name": "Invesco California Value Municipal Income Trust Common Stock",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
-    },
-    {
-      "symbol": "VCX",
-      "name": "Fundrise Innovation Fund, LLC Common Shares of Limited Liability Company Interests",
       "sector": null,
       "industry": null,
       "groups": [
@@ -53441,16 +52311,6 @@
         "us"
       ],
       "venue": "nasdaq"
-    },
-    {
-      "symbol": "WBI",
-      "name": "WaterBridge Infrastructure LLC Class A Shares Representing Limited Liability Company Interests",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nyse"
     },
     {
       "symbol": "WBTN",
@@ -54863,16 +53723,6 @@
       "venue": "nasdaq"
     },
     {
-      "symbol": "XNDU",
-      "name": "Xanadu Quantum Technologies Limited - Class B Subordinate Voting Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
-    },
-    {
       "symbol": "XOM",
       "name": "ExxonMobil Holdings Corporation Common Stock",
       "sector": null,
@@ -55381,16 +54231,6 @@
         "us"
       ],
       "venue": "nyse"
-    },
-    {
-      "symbol": "YXT",
-      "name": "YXT.COM GROUP HOLDING LIMITED - American Depository Shares",
-      "sector": null,
-      "industry": null,
-      "groups": [
-        "us"
-      ],
-      "venue": "nasdaq"
     },
     {
       "symbol": "YYAI",

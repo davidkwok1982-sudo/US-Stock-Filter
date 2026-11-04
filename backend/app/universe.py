@@ -33,6 +33,8 @@ EXCLUDE_NAME_RE = re.compile(
     r"\bADS\b|"
     r"\bADR\b|"
     r"Depositary Share|"
+    r"New York Registry|"
+    r"Registry Share|"
     r"\bETF\b|"
     r"\bETN\b|"
     r"Exchange[- ]Traded|"
@@ -57,13 +59,29 @@ EXCLUDE_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Foreign entity forms often used by ADRs that omit "Depositary" in the Nasdaq name.
+FOREIGN_ENTITY_RE = re.compile(
+    r"\b(N\.V\.|S\.A\.B?\b|S\.A\.|Ltd\.?|Limited|PLC|AG\b|SE\b|KGaA|S\.p\.A\.)",
+    re.IGNORECASE,
+)
+COMMON_EQUITY_RE = re.compile(
+    r"(Common Stock|Ordinary Share|Ordinary Shares|Capital Stock|Class [A-Z] (Common|Ordinary))",
+    re.IGNORECASE,
+)
+
 
 def to_yahoo(symbol: str) -> str:
     return symbol.strip().upper().replace(".", "-")
 
 
 def _is_excluded_name(name: str) -> bool:
-    return bool(EXCLUDE_NAME_RE.search(name or ""))
+    text = name or ""
+    if EXCLUDE_NAME_RE.search(text):
+        return True
+    # e.g. TSM is listed without "Depositary" but as a foreign Ltd. with no common-stock marker.
+    if FOREIGN_ENTITY_RE.search(text) and not COMMON_EQUITY_RE.search(text):
+        return True
+    return False
 
 
 def _valid_symbol(raw: str) -> str | None:
