@@ -11,6 +11,7 @@ from app.metrics import (
     NEAR_HIGH_WITHIN,
     PENNY_PRICE,
     RS_DAYS_1W,
+    RS_DAYS_20,
     RS_DAYS_3M,
     RS_DAYS_6M,
     SMA_FAST,
@@ -75,13 +76,17 @@ def evaluate(
     spy_closes = _closes(spy_bars)
     spy_dates = [bar["time"] for bar in spy_bars]
     stock_closes = _closes(bars)
-    ret1w = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_1W) if stock_closes else None
-    ret3 = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_3M) if stock_closes else None
-    ret6 = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_6M) if stock_closes else None
+    cal = spy_dates or list(stock_closes)
+    ret1w = window_return(stock_closes, cal, RS_DAYS_1W) if stock_closes else None
+    ret20 = window_return(stock_closes, cal, RS_DAYS_20) if stock_closes else None
+    ret3 = window_return(stock_closes, cal, RS_DAYS_3M) if stock_closes else None
+    ret6 = window_return(stock_closes, cal, RS_DAYS_6M) if stock_closes else None
     spy_ret1w = window_return(spy_closes, spy_dates, RS_DAYS_1W) if spy_closes else None
+    spy_ret20 = window_return(spy_closes, spy_dates, RS_DAYS_20) if spy_closes else None
     spy_ret3 = window_return(spy_closes, spy_dates, RS_DAYS_3M) if spy_closes else None
     spy_ret6 = window_return(spy_closes, spy_dates, RS_DAYS_6M) if spy_closes else None
     rs1w = ret1w - spy_ret1w if ret1w is not None and spy_ret1w is not None else None
+    rs20 = ret20 - spy_ret20 if ret20 is not None and spy_ret20 is not None else None
     rs3 = ret3 - spy_ret3 if ret3 is not None and spy_ret3 is not None else None
     rs6 = ret6 - spy_ret6 if ret6 is not None and spy_ret6 is not None else None
 
@@ -203,12 +208,15 @@ def evaluate(
             else None
         ),
         "ret1w": ret1w,
+        "ret20": ret20,
         "ret3m": ret3,
         "ret6m": ret6,
         "rs1w": rs1w,
+        "rs20": rs20,
         "rs3m": rs3,
         "rs6m": rs6,
         "rsBeat": bool(rs1w is not None and rs1w > 0),
+        "rsBeat20": bool(rs20 is not None and rs20 > 0),
         "pe": quote.get("pe"),
         "score": score,
         "scoreParts": parts,
@@ -237,6 +245,7 @@ def spy_snapshot(spy_bars: list[dict]) -> dict:
         "price": _round(price),
         "marketDate": spy_bars[-1]["time"] if spy_bars else None,
         "ret1w": window_return(closes, dates, RS_DAYS_1W),
+        "ret20": window_return(closes, dates, RS_DAYS_20),
         "ret3m": window_return(closes, dates, RS_DAYS_3M),
         "ret6m": window_return(closes, dates, RS_DAYS_6M),
     }

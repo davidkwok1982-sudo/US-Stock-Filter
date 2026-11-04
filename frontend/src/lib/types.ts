@@ -50,12 +50,15 @@ export type ScreenRow = {
   closeAtSupportZoneLow?: number | null
   closeAtSupportZoneHigh?: number | null
   ret1w?: number | null
+  ret20?: number | null
   ret3m: number | null
   ret6m: number | null
   rs1w?: number | null
+  rs20?: number | null
   rs3m: number | null
   rs6m: number | null
   rsBeat: boolean
+  rsBeat20?: boolean
   pe: number | null
   score: number
   scoreParts?: ScorePart[]
@@ -112,6 +115,7 @@ export type ScreenMeta = {
     price: number | null
     marketDate: string | null
     ret1w?: number | null
+    ret20?: number | null
     ret3m: number | null
     ret6m: number | null
   }
@@ -227,6 +231,7 @@ export type SortKey =
 export type Filters = {
   q: string
   rs: boolean
+  rs20: boolean
   support: boolean
   sort: SortKey
   dir: "asc" | "desc"

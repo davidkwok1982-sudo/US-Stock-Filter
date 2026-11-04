@@ -105,9 +105,15 @@ def build_notes(row: dict, levels: list[dict]) -> dict:
     rs1w = row.get("rs1w")
     if rs1w is not None:
         if rs1w >= 0:
-            high_bits.append(f"近一星期回報較 SPY 高出 {rs1w * 100:.1f} 個百分點")
+            high_bits.append(f"近 5 個交易日回報較 SPY 高出 {rs1w * 100:.1f} 個百分點")
         else:
-            high_bits.append(f"近一星期回報落後 SPY {abs(rs1w) * 100:.1f} 個百分點，相對強度偏弱")
+            high_bits.append(f"近 5 個交易日回報落後 SPY {abs(rs1w) * 100:.1f} 個百分點，相對強度偏弱")
+    rs20 = row.get("rs20")
+    if rs20 is not None:
+        if rs20 >= 0:
+            high_bits.append(f"近 20 個交易日回報較 SPY 高出 {rs20 * 100:.1f} 個百分點")
+        else:
+            high_bits.append(f"近 20 個交易日回報落後 SPY {abs(rs20) * 100:.1f} 個百分點")
     if high_bits:
         technical.append("，".join(high_bits) + "。")
 

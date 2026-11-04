@@ -246,6 +246,7 @@ class Engine:
         criteria = (snapshot.get("meta") or {}).get("criteria") or {}
         if (
             any("rs1w" not in row for row in snapshot["rows"])
+            or any("rs20" not in row for row in snapshot["rows"])
             or any("beta" in row.get("failCodes", []) or "beta_missing" in row.get("failCodes", []) or "liquidity" in row.get("failCodes", []) for row in snapshot["rows"])
             or criteria.get("scoreRuleVersion") != SCORE_RULE_VERSION
         ):

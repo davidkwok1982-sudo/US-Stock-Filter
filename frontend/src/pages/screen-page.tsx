@@ -11,8 +11,9 @@ import { formatPct } from "@/lib/format.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
 import type { Filters, SortKey } from "@/lib/types.ts"
 
-const TOGGLES: { key: keyof Filters; label: string; hint: string }[] = [
-  { key: "rs", label: "跑贏 SPY", hint: "近一星期回報高於 SPY（約5個交易日）" },
+const TOGGLES: { key: "rs" | "rs20" | "support"; label: string; hint: string }[] = [
+  { key: "rs", label: "跑贏 SPY 5 天", hint: "近約 5 個交易日收市對收市總回報高於 SPY（相對強度為正）" },
+  { key: "rs20", label: "跑贏 SPY 20 天", hint: "近約 20 個交易日收市對收市總回報高於 SPY（相對強度為正）" },
   { key: "support", label: "收市近支持", hint: "最新收市價落在結構支持區內（清晰擺動低點＋近20／60日區間低點，須≥2次觸及；區間為中軸±0.5×ATR）。與圖表支持位同一套定義" },
 ]
 
@@ -28,7 +29,7 @@ export function ScreenPage() {
     setParams(writeFilters(next), { replace: true })
   }
 
-  function toggle(key: keyof Filters) {
+  function toggle(key: "rs" | "rs20" | "support") {
     update({ ...filters, [key]: !filters[key] })
   }
 
@@ -139,7 +140,7 @@ export function ScreenPage() {
             <details className="text-sm text-muted-foreground">
               <summary className="cursor-pointer text-foreground">怎樣讀這張表</summary>
               <p className="mt-2 max-w-3xl leading-relaxed">
-                預設只列出通過篩選的股份：現價＞50天線＞150天線＞200天線、三條均線過去約一個月都向上、市值逾20億美元。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「收市近支持」以結構支持區（擺動＋近20／60日低點、≥2次觸及、±0.5×ATR）判斷；最新收市須落在該區內。
+                預設只列出通過篩選的股份：現價＞50天線＞150天線＞200天線、三條均線過去約一個月都向上、市值逾20億美元。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「跑贏 SPY 5 天／20 天」以約 5／20 個交易日收市對收市總回報減 SPY 為正判斷。「收市近支持」以結構支持區（擺動＋近20／60日低點、≥2次觸及、±0.5×ATR）判斷；最新收市須落在該區內。
                 <Link to="/strategy" className="ml-2 text-foreground underline underline-offset-4">
                   策略說明
                 </Link>
@@ -162,6 +163,7 @@ export function ScreenPage() {
                     ...filters,
                     q: "",
                     rs: false,
+                    rs20: false,
                     support: false,
                   })
                 }

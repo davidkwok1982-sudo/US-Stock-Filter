@@ -161,7 +161,9 @@ def test_uptrend_passes_stage_two():
     assert row["industry"] == "半導體"
     assert row["score"] > 40
     assert "rs1w" in row
+    assert "rs20" in row
     assert row["rsBeat"] == (row["rs1w"] is not None and row["rs1w"] > 0)
+    assert row["rsBeat20"] == (row["rs20"] is not None and row["rs20"] > 0)
     assert all(part["key"] not in {"nearHigh", "beta", "rs6"} for part in row["scoreParts"])
     assert any(part["key"] == "rs1w" for part in row["scoreParts"])
     assert row["failReasons"] == []

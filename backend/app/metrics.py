@@ -23,6 +23,7 @@ SLOPE_LOOKBACK = 20
 BETA_LOOKBACK = 90
 BETA_MIN_OBS = 60
 RS_DAYS_1W = 5
+RS_DAYS_20 = 20
 RS_DAYS_3M = 63
 RS_DAYS_6M = 126
 DOLLAR_DAYS = 63
@@ -31,7 +32,7 @@ PENNY_PRICE = 5.0
 MICRO_CAP = 300_000_000
 
 # Bump when score parts / RS definition change so cached rows recompute.
-SCORE_RULE_VERSION = 4
+SCORE_RULE_VERSION = 5
 
 # Freed nearHigh(15)+beta(5)=20 → slope / vsSma200 / rs / liquidity.
 SCORE_MAX = {
