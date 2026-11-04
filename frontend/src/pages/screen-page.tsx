@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 
+import { IndustryHeatmap } from "@/components/industry-heatmap.tsx"
 import { ScreenTable } from "@/components/screen-table.tsx"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -162,6 +163,8 @@ export function ScreenPage() {
               </p>
             </details>
           </div>
+
+          {rows.length > 0 ? <IndustryHeatmap rows={rows} /> : null}
 
           {rows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border px-4 py-12 text-center">

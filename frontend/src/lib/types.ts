@@ -19,7 +19,9 @@ export type ScreenRow = {
   groups: string[]
   groupLabels: string[]
   sector: string | null
+  sectorEn?: string | null
   industry: string | null
+  industryEn?: string | null
   price: number | null
   changePct: number | null
   marketCap: number | null
