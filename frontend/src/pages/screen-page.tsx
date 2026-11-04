@@ -3,7 +3,6 @@ import { Link, useSearchParams } from "react-router-dom"
 
 import { IndustryHeatmap } from "@/components/industry-heatmap.tsx"
 import { ScreenTable } from "@/components/screen-table.tsx"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -54,22 +53,6 @@ export function ScreenPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs tracking-[0.22em] text-muted-foreground">STRATEGY</p>
-          <h1 className="font-heading text-3xl font-semibold">階律篩選</h1>
-        </div>
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="策略">
-          <Badge>使用中</Badge>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/strategy#upcoming">趨勢模板 · 即將推出</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/strategy#upcoming">成長股法則 · 即將推出</Link>
-          </Button>
-        </div>
-      </div>
-
       {!ready && !loadError ? <LoadingState message={data?.refresh.message ?? "正在連線"} progress={data?.refresh.progress ?? 4} /> : null}
       {loadError && !ready ? (
         <ErrorState message={loadError} onRetry={() => void refresh()} />
