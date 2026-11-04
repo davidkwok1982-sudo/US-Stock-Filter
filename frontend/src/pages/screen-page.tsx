@@ -12,11 +12,8 @@ import { useScreen } from "@/lib/screen-context.tsx"
 import type { Filters, SortKey } from "@/lib/types.ts"
 
 const TOGGLES: { key: keyof Filters; label: string; hint: string }[] = [
-  { key: "above50", label: "高於50天線", hint: "現價高於50天線" },
-  { key: "slope", label: "均線向上", hint: "50／150／200天線過去約一個月都向上（硬性條件已要求；此鈕可再強調）" },
   { key: "rs", label: "跑贏 SPY", hint: "近一星期回報高於 SPY（約5個交易日）" },
   { key: "support", label: "收市近支持", hint: "最新收市價剛好落在近期擺動支持位附近（約 ±1%），允許輕微刺穿但未明顯跌破" },
-  { key: "excludeMicro", label: "排除場外及微盤", hint: "剔除股價低於 5 美元、市值少於 3 億或場外代號" },
 ]
 
 export function ScreenPage() {
@@ -164,12 +161,8 @@ export function ScreenPage() {
                   update({
                     ...filters,
                     q: "",
-                    above50: false,
-                    slope: false,
-                    nearHigh: false,
                     rs: false,
                     support: false,
-                    excludeMicro: true,
                   })
                 }
               >

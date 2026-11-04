@@ -213,12 +213,8 @@ export type SortKey =
 
 export type Filters = {
   q: string
-  above50: boolean
-  slope: boolean
-  nearHigh: boolean
   rs: boolean
   support: boolean
-  excludeMicro: boolean
   sort: SortKey
   dir: "asc" | "desc"
 }

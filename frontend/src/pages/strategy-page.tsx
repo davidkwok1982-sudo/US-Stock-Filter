@@ -1,8 +1,6 @@
 import { useEffect } from "react"
 import { Link } from "react-router-dom"
 
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 
 const SCORE_ROWS = [
@@ -68,13 +66,10 @@ export function StrategyPage() {
 
       <section className="space-y-3 text-sm leading-relaxed">
         <h2 className="font-heading text-2xl">可選收緊</h2>
-        <p>這些開關預設大多關掉。打開之後只會縮小表格，不會改寫頂部的通過家數。</p>
+        <p>這些開關預設關掉。打開之後只會縮小表格，不會改寫頂部的通過家數。</p>
         <ul className="list-disc space-y-1 pl-5">
-          <li>高於 50 天線。</li>
-          <li>50／150／200 天線過去約一個月都向上。</li>
           <li>近一星期回報跑贏 SPY（約 5 個交易日回報減 SPY 為正）。</li>
           <li>收市近支持：以日線擺動低點（兩次以上觸及，或一次清晰擺動）估計支持；最新收市落在該位約 1% 內（高於約 1.2% 或以內、輕微刺穿約 1% 內仍可；明顯低於約 1.8% 則否），優先取最接近且不大於收市價的支持。全量更新時會重算，規則版本變更時亦會用已存日線重填此欄。</li>
-          <li>排除場外及微盤：股價低於 5 美元、市值少於 3 億美元，或交易所屬場外。</li>
         </ul>
       </section>
 
@@ -94,31 +89,6 @@ export function StrategyPage() {
           行情來自 Yahoo Finance 的公開圖表與報價接口，不需要 API 金鑰。K 線和均線用拆股還原價，成交額用未還原收市價乘成交量。免費數據可能延遲、缺漏，或在盤中改寫最後一根日線。結果會寫入本機 SQLite；全量更新按批次下載，預設 12 小時內不重複全量下載；手動更新另有約五分鐘的冷卻。
         </p>
         <p>個股頁的行業、市盈率和收入增長來自 Yahoo 的免費公司摘要，季報數字可能落後。沒有就不硬填。</p>
-      </section>
-
-      <section id="upcoming" className="space-y-3">
-        <h2 className="font-heading text-2xl">即將推出</h2>
-        <p className="text-sm text-muted-foreground">介面和 API 已留了策略編號。下面兩套尚未計算，打開篩選不會假裝有結果。</p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <Badge variant="outline">即將推出</Badge>
-              <CardTitle className="font-heading text-xl">趨勢模板</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm leading-relaxed text-muted-foreground">
-              預留：距 52 週低位與高位的距離、相對強度排名等公開模板條件。接入時會做成另一個策略分頁。
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <Badge variant="outline">即將推出</Badge>
-              <CardTitle className="font-heading text-xl">成長股法則</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm leading-relaxed text-muted-foreground">
-              預留：盈利與銷售增長、接近新高、領先股與需求等公開框架。基本因素目前只在個股頁作短註，尚未構成篩選。
-            </CardContent>
-          </Card>
-        </div>
       </section>
 
       <Separator />
