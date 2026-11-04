@@ -281,42 +281,33 @@ def test_parse_wikipedia_styles_and_class_shares():
 
 
 def _breakout_retest_bars() -> list[dict]:
-    """Synthetic daily bars: multi-touch resistance ~100, breakout, extension, retest."""
+    """Synthetic: multi-touch ~100 resistance, breakout, extension, then retest."""
     closes: list[float] = []
-    # Long base below 100 with repeated approaches to the ceiling.
-    for _ in range(8):
-        for phase in range(12):
-            if phase <= 6:
-                closes.append(90 + phase * (10 / 6))
+    # Long base under 100.
+    for _ in range(12):
+        for phase in range(10):
+            if phase <= 5:
+                closes.append(88 + phase * 2.2)  # up to ~99
             else:
-                closes.append(100 - (phase - 6) * 1.4)
-    # Cap peaks at or just under 100.
-    closes = [min(c, 99.6) for c in closes]
-    # Breakout: two+ closes clearly above 101.2, then extend to ~104.
-    for step in range(3):
-        closes.append(101.3 + step * 0.3)
-    for step in range(5):
-        closes.append(102.2 + step * 0.4)  # up to ~104.2
-    # Pull back to retest ~100.
-    for step in range(5):
-        closes.append(104.0 - step * 0.75)  # toward ~100.25
-    # Hold above after retest.
-    for step in range(4):
-        closes.append(100.4 + step * 0.25)
+                closes.append(99 - (phase - 5) * 2.0)
+    closes = [min(c, 99.2) for c in closes]
+    # Quiet flat then breakout.
+    closes += [99.0, 99.1, 99.0]
+    closes += [101.7, 102.2, 103.0, 103.8, 104.6, 105.0]  # break + extend
+    closes += [103.8, 102.2, 101.0, 100.2]  # pullback
+    closes += [100.8, 101.4, 102.0]  # hold above
 
     day = date(2025, 1, 2)
     bars = []
     for close in closes:
         while day.weekday() >= 5:
             day += timedelta(days=1)
-        high = close + 0.6
-        low = close - 0.6
         bars.append(
             {
                 "time": day.isoformat(),
                 "open": close,
-                "high": high,
-                "low": low,
+                "high": close + 0.5,
+                "low": close - 0.5,
                 "close": close,
                 "volume": 2_000_000,
                 "dollar": close * 2_000_000,
@@ -324,25 +315,21 @@ def _breakout_retest_bars() -> list[dict]:
         )
         day += timedelta(days=1)
 
-    # Pin several early swing highs exactly at 100.
-    pinned = 0
-    for index in range(5, len(bars) - 30):
-        if bars[index]["close"] >= 98.5 and bars[index]["close"] <= 99.6:
-            # local peak-ish
-            if index >= 5 and bars[index]["close"] >= bars[index - 1]["close"]:
-                bars[index]["high"] = 100.0
-                bars[index]["close"] = 99.4
-                pinned += 1
-    # Retest bar: tag 100 with the low.
-    for index in range(len(bars) - 10, len(bars) - 2):
+    # Pin early swing highs at 100; leave the final 20 bars alone.
+    for index in range(5, len(bars) - 20):
+        if bars[index]["close"] >= 97.5:
+            bars[index]["high"] = 100.0
+            bars[index]["close"] = min(bars[index]["close"], 99.0)
+    # Dedicated retest bar after the peak.
+    for index in range(len(bars) - 7, len(bars) - 3):
         if bars[index]["close"] <= 101.5:
-            bars[index]["low"] = 99.5
-            bars[index]["close"] = 100.3
-            bars[index]["high"] = 101.0
+            bars[index]["low"] = 99.4
+            bars[index]["close"] = 100.6
+            bars[index]["high"] = 101.2
             break
-    bars[-1]["close"] = 101.2
-    bars[-1]["low"] = 100.6
-    bars[-1]["high"] = 101.8
+    bars[-1]["close"] = 102.0
+    bars[-1]["low"] = 101.3
+    bars[-1]["high"] = 102.4
     return bars
 
 

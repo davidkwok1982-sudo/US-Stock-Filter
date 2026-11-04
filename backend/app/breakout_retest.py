@@ -6,33 +6,26 @@ but non-empty hit rate on a liquid US universe.
 
 from __future__ import annotations
 
-# Bump when the rule changes so cached rows can be recomputed once.
-RULE_VERSION = 2
+RULE_VERSION = 3
 
 _SEGMENT = 189
 _SWING_WINDOW = 5
 _CLUSTER_TOL = 0.01
-# Clear breakout above prior resistance.
-_BREAK_PCT = 0.012
+_BREAK_PCT = 0.015
 _MIN_CLOSES_ABOVE = 2
-_BREAKOUT_LOOKBACK = 50
-# After breakout, price should have extended a bit before the pullback.
-_MIN_EXTENSION_AFTER_BREAK = 0.02
-# Retest: low tags the former resistance zone.
-_RETEST_BAND = 0.015
+_BREAKOUT_LOOKBACK = 45
+_MIN_EXTENSION_AFTER_BREAK = 0.025
+_RETEST_BAND = 0.012
 _FAIL_CLOSE_PCT = 0.01
-_RETEST_RECENT = 16
-_HOLD_PCT = 0.005
-_MAX_EXTENSION = 0.08
-_MIN_LEVEL_AGE = 10
+_RETEST_RECENT = 15
+_HOLD_MIN = 0.005  # last close must be at least this far above level
+_HOLD_MAX = 0.06   # and not already extended beyond this
+_MIN_LEVEL_AGE = 12
 _MIN_TOUCHES = 2
-# Prior resistance should sit a little below the last close (actionable).
-_LEVEL_BELOW_MIN = 0.0
-_LEVEL_BELOW_MAX = 0.08
+_MIN_BARS_BEFORE_BREAK = 6  # resistance last touch must predate breakout
 
 
 def detect_breakout_retest(bars: list[dict]) -> tuple[bool, str | None]:
-    """Return (matched, short zh-Hant note) for daily OHLC bars."""
     if len(bars) < _SWING_WINDOW * 2 + 50:
         return False, None
 
@@ -47,8 +40,7 @@ def detect_breakout_retest(bars: list[dict]) -> tuple[bool, str | None]:
     if not swing_highs:
         return False, None
 
-    clusters = _cluster(swing_highs, _CLUSTER_TOL)
-    clusters = [c for c in clusters if c["touches"] >= _MIN_TOUCHES]
+    clusters = [c for c in _cluster(swing_highs, _CLUSTER_TOL) if c["touches"] >= _MIN_TOUCHES]
     clusters.sort(key=lambda c: (c["touches"], c["last_index"]), reverse=True)
 
     for cluster in clusters:
@@ -56,15 +48,11 @@ def detect_breakout_retest(bars: list[dict]) -> tuple[bool, str | None]:
         if level <= 0:
             continue
         dist = last_close / level - 1
-        if dist < _LEVEL_BELOW_MIN or dist > _LEVEL_BELOW_MAX:
+        if dist < _HOLD_MIN or dist > _HOLD_MAX:
             continue
-
-        result = _try_level(
-            segment, level, cluster["first_index"], cluster["last_index"], cluster["touches"]
-        )
+        result = _try_level(segment, level, cluster["first_index"], cluster["last_index"], cluster["touches"])
         if result is not None:
             return result
-
     return False, None
 
 
@@ -119,24 +107,25 @@ def _try_level(
     last_i = n - 1
     last_close = bars[last_i]["close"]
 
-    if level_last >= last_i - 5:
-        return None
-
     breakout_start = max(0, last_i - _BREAKOUT_LOOKBACK)
     breakout_i = _find_breakout(bars, level, breakout_start, level_last)
     if breakout_i is None:
         return None
-    if level_first >= breakout_i - _MIN_LEVEL_AGE and touches < 3:
+
+    # Prior resistance must clearly predate the breakout.
+    if level_last > breakout_i - _MIN_BARS_BEFORE_BREAK:
         return None
-    if level_last >= breakout_i and level_first >= breakout_i - _MIN_LEVEL_AGE:
+    if breakout_i - level_first < _MIN_LEVEL_AGE and touches < 3:
         return None
 
     post = bars[breakout_i : last_i + 1]
-    peak = max(bar["high"] for bar in post)
+    peak_i = breakout_i + max(range(len(post)), key=lambda k: post[k]["high"])
+    peak = bars[peak_i]["high"]
     if peak < level * (1 + _MIN_EXTENSION_AFTER_BREAK):
         return None
 
-    retest_i = _find_retest(bars, level, breakout_i + 1, last_i)
+    # Retest must come after the post-breakout peak (true pullback).
+    retest_i = _find_retest(bars, level, peak_i + 1, last_i)
     if retest_i is None:
         return None
 
@@ -147,15 +136,13 @@ def _try_level(
     if last_i - retest_i > _RETEST_RECENT:
         return None
 
-    if last_close < level * (1 - _HOLD_PCT):
+    dist = last_close / level - 1
+    if dist < _HOLD_MIN or dist > _HOLD_MAX:
         return None
 
-    if last_close > level * (1 + _MAX_EXTENSION):
-        return None
-
-    pre = bars[max(0, breakout_i - 40) : breakout_i]
+    pre = bars[max(0, breakout_i - 45) : breakout_i]
     closes_below = sum(1 for bar in pre if bar["close"] <= level * 1.002)
-    if closes_below < 8:
+    if closes_below < 10:
         return None
 
     note = f"約 {level:.2f} 阻力突破後回測"
@@ -187,7 +174,7 @@ def _find_retest(bars: list[dict], level: float, start: int, end: int) -> int | 
         return None
     lo = level * (1 - _RETEST_BAND)
     hi = level * (1 + _RETEST_BAND)
-    found: int | None = None
+    found = None
     for i in range(start, end + 1):
         low = bars[i]["low"]
         close = bars[i]["close"]
