@@ -21,7 +21,7 @@ export function readFilters(params: URLSearchParams): Filters {
     slope: params.get("slope") === "1",
     nearHigh: params.get("high") === "1",
     rs: params.get("rs") === "1",
-    retest: params.get("retest") === "1",
+    support: params.get("support") === "1" || params.get("retest") === "1",
     excludeMicro: params.get("micro") !== "0",
     sort: sort && SORTS.has(sort as SortKey) ? (sort as SortKey) : "score",
     dir: params.get("dir") === "asc" ? "asc" : "desc",
@@ -35,7 +35,7 @@ export function writeFilters(filters: Filters): URLSearchParams {
   if (filters.slope) params.set("slope", "1")
   if (filters.nearHigh) params.set("high", "1")
   if (filters.rs) params.set("rs", "1")
-  if (filters.retest) params.set("retest", "1")
+  if (filters.support) params.set("support", "1")
   if (!filters.excludeMicro) params.set("micro", "0")
   if (filters.sort !== "score") params.set("sort", filters.sort)
   if (filters.dir !== "desc") params.set("dir", filters.dir)
@@ -50,7 +50,7 @@ export function visibleRows(rows: ScreenRow[], filters: Filters): ScreenRow[] {
     if (filters.slope && !row.slopeUp) return false
     if (filters.nearHigh && !row.nearHigh) return false
     if (filters.rs && !row.rsBeat) return false
-    if (filters.retest && !row.breakoutRetest) return false
+    if (filters.support && !row.closeAtSupport) return false
     if (filters.excludeMicro && row.microOrOtc) return false
     if (!query) return true
     return row.symbol.toLowerCase().includes(query) || row.name.toLowerCase().includes(query)

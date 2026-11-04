@@ -280,34 +280,30 @@ def test_parse_wikipedia_styles_and_class_shares():
     assert ndx_rows[1]["industry"] == "Interactive Media & Services"
 
 
-def _breakout_retest_bars() -> list[dict]:
-    """Synthetic: multi-touch ~100 resistance, breakout, extension, then retest."""
+def _close_at_support_bars() -> list[dict]:
+    """Synthetic: repeated swing lows near 100, latest close sits on that support."""
     closes: list[float] = []
-    # Long base under 100.
-    for _ in range(12):
-        for phase in range(10):
-            if phase <= 5:
-                closes.append(88 + phase * 2.2)  # up to ~99
-            else:
-                closes.append(99 - (phase - 5) * 2.0)
-    closes = [min(c, 99.2) for c in closes]
-    # Quiet flat then breakout.
-    closes += [99.0, 99.1, 99.0]
-    closes += [101.7, 102.2, 103.0, 103.8, 104.6, 105.0]  # break + extend
-    closes += [103.8, 102.2, 101.0, 100.2]  # pullback
-    closes += [100.8, 101.4, 102.0]  # hold above
+    # Several bounce cycles that bottom near 100.
+    for _ in range(6):
+        closes.extend([100.0, 101.5, 103.0, 105.0, 107.0, 105.5, 103.5, 102.0, 101.0, 100.2])
+    # Drift up then settle back onto support.
+    closes.extend([102.0, 104.0, 106.0, 104.0, 102.0, 100.5])
 
     day = date(2025, 1, 2)
     bars = []
     for close in closes:
         while day.weekday() >= 5:
             day += timedelta(days=1)
+        low = close - 0.4
+        # Emphasize trough bars as clear swing lows at 100.
+        if abs(close - 100.0) < 0.05:
+            low = 100.0
         bars.append(
             {
                 "time": day.isoformat(),
                 "open": close,
-                "high": close + 0.5,
-                "low": close - 0.5,
+                "high": close + 0.6,
+                "low": low,
                 "close": close,
                 "volume": 2_000_000,
                 "dollar": close * 2_000_000,
@@ -315,44 +311,47 @@ def _breakout_retest_bars() -> list[dict]:
         )
         day += timedelta(days=1)
 
-    # Pin early swing highs at 100; leave the final 20 bars alone.
-    for index in range(5, len(bars) - 20):
-        if bars[index]["close"] >= 97.5:
-            bars[index]["high"] = 100.0
-            bars[index]["close"] = min(bars[index]["close"], 99.0)
-    # Dedicated retest bar after the peak.
-    for index in range(len(bars) - 7, len(bars) - 3):
-        if bars[index]["close"] <= 101.5:
-            bars[index]["low"] = 99.4
-            bars[index]["close"] = 100.6
-            bars[index]["high"] = 101.2
-            break
-    bars[-1]["close"] = 102.0
-    bars[-1]["low"] = 101.3
-    bars[-1]["high"] = 102.4
+    # Latest bar closes just above the ~100 support.
+    bars[-1]["close"] = 100.6
+    bars[-1]["low"] = 100.1
+    bars[-1]["high"] = 101.2
+    bars[-1]["open"] = 100.8
     return bars
 
 
-def test_breakout_retest_detects_synthetic_pattern():
-    from app.breakout_retest import detect_breakout_retest
+def test_close_at_support_detects_synthetic_pattern():
+    from app.close_at_support import detect_close_at_support
 
-    bars = _breakout_retest_bars()
-    matched, note = detect_breakout_retest(bars)
+    bars = _close_at_support_bars()
+    matched, note = detect_close_at_support(bars)
     assert matched is True
     assert note is not None
 
 
-def test_breakout_retest_false_on_plain_uptrend():
-    from app.breakout_retest import detect_breakout_retest
+def test_close_at_support_false_when_far_above():
+    from app.close_at_support import detect_close_at_support
 
     closes = [50 + i * 0.15 for i in range(200)]
     bars = _bars(date(2024, 1, 2), closes)
-    matched, note = detect_breakout_retest(bars)
+    matched, note = detect_close_at_support(bars)
     assert matched is False
     assert note is None
 
 
-def test_evaluate_includes_breakout_retest_flag():
+def test_close_at_support_false_when_clearly_broken():
+    from app.close_at_support import detect_close_at_support
+
+    bars = _close_at_support_bars()
+    # Crash well below the ~100 support.
+    bars[-1]["close"] = 96.0
+    bars[-1]["low"] = 95.5
+    bars[-1]["high"] = 96.5
+    matched, note = detect_close_at_support(bars)
+    assert matched is False
+    assert note is None
+
+
+def test_evaluate_includes_close_at_support_flag():
     stock_bars, spy_bars = _paired()
     row = evaluate(
         {"symbol": "EXM", "name": "Example", "groups": ["sp500"], "sector": None, "industry": None},
@@ -360,5 +359,6 @@ def test_evaluate_includes_breakout_retest_flag():
         {"price": stock_bars[-1]["close"], "marketCap": 80e9, "quoteType": "EQUITY", "exchangeName": "NasdaqGS"},
         spy_bars,
     )
-    assert "breakoutRetest" in row
-    assert isinstance(row["breakoutRetest"], bool)
+    assert "closeAtSupport" in row
+    assert isinstance(row["closeAtSupport"], bool)
+    assert "breakoutRetest" not in row

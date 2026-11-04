@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.breakout_retest import detect_breakout_retest
+from app.close_at_support import detect_close_at_support
 from app.labels import group_labels, industry_zh, sector_zh
 from app.metrics import (
     BETA_MIN_OBS,
@@ -137,7 +137,7 @@ def evaluate(
     above200 = bool(price and sma200 and price > sma200)
     slope_up = bool(slope50 is not None and slope50 > 0 and slope200 is not None and slope200 > 0)
     near_high = bool(drawdown is not None and drawdown >= -NEAR_HIGH_WITHIN)
-    breakout_retest, breakout_retest_note = detect_breakout_retest(bars)
+    close_at_support, close_at_support_note = detect_close_at_support(bars)
     score, parts = build_score(
         distance200=distance200,
         above50=above50,
@@ -180,8 +180,8 @@ def evaluate(
         "low52": _round(low52),
         "pctFromHigh": drawdown,
         "nearHigh": near_high,
-        "breakoutRetest": breakout_retest,
-        "breakoutRetestNote": breakout_retest_note,
+        "closeAtSupport": close_at_support,
+        "closeAtSupportNote": close_at_support_note,
         "beta": beta,
         "betaBasis": beta_basis,
         "ret3m": ret3,

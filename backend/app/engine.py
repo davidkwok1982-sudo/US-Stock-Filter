@@ -8,7 +8,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from app.config import COOLDOWN_SECONDS, LIMIT, TTL_HOURS, WORKERS
-from app.breakout_retest import RULE_VERSION, detect_breakout_retest
+from app.close_at_support import RULE_VERSION, detect_close_at_support
 from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
 from app.levels import find_levels
@@ -142,7 +142,7 @@ class Engine:
                     "minDollarVolume": 30_000_000,
                     "minBeta": 1,
                     "nearHighWithin": 0.25,
-                    "breakoutRetestRuleVersion": RULE_VERSION,
+                    "closeAtSupportRuleVersion": RULE_VERSION,
                     "breadthBullish": 200,
                     "breadthCautiousBelow": 100,
                 },
@@ -166,10 +166,10 @@ class Engine:
         meta = snapshot.get("meta") or {}
         criteria = meta.get("criteria") or {}
         if (
-            any("breakoutRetest" not in row for row in snapshot["rows"])
-            or criteria.get("breakoutRetestRuleVersion") != RULE_VERSION
+            any("closeAtSupport" not in row for row in snapshot["rows"])
+            or criteria.get("closeAtSupportRuleVersion") != RULE_VERSION
         ):
-            self._backfill_breakout_retest(snapshot)
+            self._backfill_close_at_support(snapshot)
         slim = []
         for row in snapshot["rows"]:
             item = dict(row)
@@ -183,18 +183,21 @@ class Engine:
             "refresh": refresh,
         }
 
-    def _backfill_breakout_retest(self, snapshot: dict) -> None:
-        """Fill breakoutRetest on older cached rows from daily charts (one-shot)."""
+    def _backfill_close_at_support(self, snapshot: dict) -> None:
+        """Fill closeAtSupport on older cached rows from daily charts (one-shot)."""
         for row in snapshot["rows"]:
             bars = store.load_chart(row["symbol"])
-            matched, note = detect_breakout_retest(bars or [])
-            row["breakoutRetest"] = matched
-            row["breakoutRetestNote"] = note
+            matched, note = detect_close_at_support(bars or [])
+            row["closeAtSupport"] = matched
+            row["closeAtSupportNote"] = note
+            row.pop("breakoutRetest", None)
+            row.pop("breakoutRetestNote", None)
         meta = snapshot.setdefault("meta", {})
         criteria = meta.setdefault("criteria", {})
-        criteria["breakoutRetestRuleVersion"] = RULE_VERSION
+        criteria["closeAtSupportRuleVersion"] = RULE_VERSION
+        criteria.pop("breakoutRetestRuleVersion", None)
         store.save_snapshot(snapshot)
-        log.info("backfilled breakoutRetest v%s on %s cached rows", RULE_VERSION, len(snapshot["rows"]))
+        log.info("backfilled closeAtSupport v%s on %s cached rows", RULE_VERSION, len(snapshot["rows"]))
 
     def detail(self, symbol: str, interval: str = "1d") -> dict:
         symbol = normalize_symbol(symbol)

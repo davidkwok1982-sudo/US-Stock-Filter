@@ -40,8 +40,8 @@ export type ScreenRow = {
   low52: number | null
   pctFromHigh: number | null
   nearHigh: boolean
-  breakoutRetest: boolean
-  breakoutRetestNote?: string | null
+  closeAtSupport: boolean
+  closeAtSupportNote?: string | null
   beta: number | null
   betaBasis: "yahoo" | "90d-spy" | null
   ret3m: number | null
@@ -186,7 +186,7 @@ export type Filters = {
   slope: boolean
   nearHigh: boolean
   rs: boolean
-  retest: boolean
+  support: boolean
   excludeMicro: boolean
   sort: SortKey
   dir: "asc" | "desc"
