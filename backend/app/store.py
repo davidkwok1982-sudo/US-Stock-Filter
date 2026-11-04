@@ -83,6 +83,15 @@ def save_refresh(snapshot: dict, charts: dict[str, list[dict]]) -> None:
         conn.commit()
 
 
+def save_snapshot(snapshot: dict) -> None:
+    """Overwrite the screen snapshot without touching cached charts."""
+    init_db()
+    encoded = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+    with _connect() as conn:
+        conn.execute("INSERT OR REPLACE INTO kv (k, v) VALUES ('snapshot', ?)", (encoded,))
+        conn.commit()
+
+
 def load_snapshot() -> dict | None:
     init_db()
     with _connect() as conn:

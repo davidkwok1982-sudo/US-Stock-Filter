@@ -278,3 +278,109 @@ def test_parse_wikipedia_styles_and_class_shares():
     assert ndx_rows[1]["name"] == "Alphabet (Class C)"
     assert ndx_rows[1]["sector"] == "Technology"
     assert ndx_rows[1]["industry"] == "Interactive Media & Services"
+
+
+def _breakout_retest_bars() -> list[dict]:
+    """Synthetic daily bars: resistance ~100, breakout, then retest."""
+    closes: list[float] = []
+    # Build ~120 bars oscillating under 100 to form swing highs at 100.
+    for cycle in range(6):
+        for phase in range(16):
+            if phase <= 8:
+                closes.append(88 + phase * 1.5)  # up toward ~100
+            else:
+                closes.append(100 - (phase - 8) * 1.5)
+    # Cap the swing peaks near 100.
+    for i, value in enumerate(closes):
+        if value > 100:
+            closes[i] = 100.0
+    # Breakout: climb and close clearly above 100.
+    for step in range(8):
+        closes.append(100.5 + step * 0.4)  # up to ~103.3
+    # Pull back to retest ~100.
+    for step in range(6):
+        closes.append(103.3 - step * 0.55)  # down toward ~100
+    # Hold above after retest.
+    for step in range(5):
+        closes.append(100.2 + step * 0.3)
+
+    day = date(2025, 1, 2)
+    bars = []
+    for close in closes:
+        while day.weekday() >= 5:
+            day += timedelta(days=1)
+        # Shape highs/lows so swing highs cluster near 100 and retest tags it.
+        high = max(close * 1.01, close + 0.5)
+        low = min(close * 0.99, close - 0.5)
+        if 99.0 <= close <= 100.2:
+            high = max(high, 100.0)
+        bars.append(
+            {
+                "time": day.isoformat(),
+                "open": close * 0.998,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": 2_000_000,
+                "dollar": close * 2_000_000,
+            }
+        )
+        day += timedelta(days=1)
+
+    # Force several clear swing highs at 100 before breakout.
+    # Find early segment peaks and pin high=100.
+    for index in range(6, len(bars) - 40):
+        if abs(bars[index]["close"] - 100) < 1.5 and bars[index]["close"] >= 98:
+            bars[index]["high"] = 100.0
+            bars[index]["close"] = min(bars[index]["close"], 99.5)
+
+    # Ensure breakout closes are clearly above 100.7.
+    # Last ~19 bars: breakout + retest + hold (see construction above).
+    # Find first bar with close > 101 in the last 40 and boost a couple.
+    for index, bar in enumerate(bars):
+        if bar["close"] >= 101:
+            bar["close"] = max(bar["close"], 101.2)
+            bar["high"] = max(bar["high"], bar["close"] * 1.005)
+            break
+    # Retest: set a recent low that tags 100.
+    for index in range(len(bars) - 12, len(bars) - 3):
+        if bars[index]["close"] <= 101.5:
+            bars[index]["low"] = 99.6
+            bars[index]["close"] = max(bars[index]["close"], 100.1)
+            break
+    # Last close holds above.
+    bars[-1]["close"] = 101.5
+    bars[-1]["low"] = 100.8
+    bars[-1]["high"] = 102.0
+    return bars
+
+
+def test_breakout_retest_detects_synthetic_pattern():
+    from app.breakout_retest import detect_breakout_retest
+
+    bars = _breakout_retest_bars()
+    matched, note = detect_breakout_retest(bars)
+    assert matched is True
+    assert note is not None
+
+
+def test_breakout_retest_false_on_plain_uptrend():
+    from app.breakout_retest import detect_breakout_retest
+
+    closes = [50 + i * 0.15 for i in range(200)]
+    bars = _bars(date(2024, 1, 2), closes)
+    matched, note = detect_breakout_retest(bars)
+    assert matched is False
+    assert note is None
+
+
+def test_evaluate_includes_breakout_retest_flag():
+    stock_bars, spy_bars = _paired()
+    row = evaluate(
+        {"symbol": "EXM", "name": "Example", "groups": ["sp500"], "sector": None, "industry": None},
+        stock_bars,
+        {"price": stock_bars[-1]["close"], "marketCap": 80e9, "quoteType": "EQUITY", "exchangeName": "NasdaqGS"},
+        spy_bars,
+    )
+    assert "breakoutRetest" in row
+    assert isinstance(row["breakoutRetest"], bool)

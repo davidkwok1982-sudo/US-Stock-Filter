@@ -16,6 +16,7 @@ const TOGGLES: { key: keyof Filters; label: string; hint: string }[] = [
   { key: "slope", label: "均線向上", hint: "50及200天線過去約一個月都向上" },
   { key: "nearHigh", label: "近52週高位", hint: "距52週高位 25% 以內" },
   { key: "rs", label: "跑贏 SPY", hint: "六個月回報高於 SPY" },
+  { key: "retest", label: "突破後回測", hint: "約兩個月內收市突破前阻力，其後低位回測該位作支持，現價仍企穩其上（約數規則）" },
   { key: "excludeMicro", label: "排除場外及微盤", hint: "剔除股價低於 5 美元、市值少於 3 億或場外代號" },
 ]
 
@@ -139,7 +140,7 @@ export function ScreenPage() {
             <details className="text-sm text-muted-foreground">
               <summary className="cursor-pointer text-foreground">怎樣讀這張表</summary>
               <p className="mt-2 max-w-3xl leading-relaxed">
-                預設只列出通過硬性條件的股份：股價高於200天線、市值逾20億美元、日均成交額約3,000萬美元、貝他不低於1。評分把距離均線、斜率、是否貼近高位、相對 SPY 和流動性加總，方便排序，不是買賣訊號。可選按鈕會再收緊名單，但不會改寫上面的通過家數。
+                預設只列出通過硬性條件的股份：股價高於200天線、市值逾20億美元、日均成交額約3,000萬美元、貝他不低於1。評分把距離均線、斜率、是否貼近高位、相對 SPY 和流動性加總，方便排序，不是買賣訊號。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「突破後回測」以日線擺動高點估計前阻力，約兩個月內收市明顯突破後，低位於約百分之一至二內回測該位且未明顯跌破，現價仍企穩其上（教育約數）。
                 <Link to="/strategy" className="ml-2 text-foreground underline underline-offset-4">
                   策略說明
                 </Link>
@@ -165,6 +166,7 @@ export function ScreenPage() {
                     slope: false,
                     nearHigh: false,
                     rs: false,
+                    retest: false,
                     excludeMicro: true,
                   })
                 }

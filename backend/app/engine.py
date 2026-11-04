@@ -8,6 +8,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from app.config import COOLDOWN_SECONDS, LIMIT, TTL_HOURS, WORKERS
+from app.breakout_retest import detect_breakout_retest
 from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
 from app.levels import find_levels
@@ -161,6 +162,8 @@ class Engine:
         refresh = self.status()
         if snapshot is None:
             return {"ready": False, "stale": False, "meta": None, "rows": [], "refresh": refresh}
+        if any("breakoutRetest" not in row for row in snapshot["rows"]):
+            self._backfill_breakout_retest(snapshot)
         slim = []
         for row in snapshot["rows"]:
             item = dict(row)
@@ -173,6 +176,18 @@ class Engine:
             "rows": slim,
             "refresh": refresh,
         }
+
+    def _backfill_breakout_retest(self, snapshot: dict) -> None:
+        """Fill breakoutRetest on older cached rows from daily charts (one-shot)."""
+        for row in snapshot["rows"]:
+            if "breakoutRetest" in row:
+                continue
+            bars = store.load_chart(row["symbol"])
+            matched, note = detect_breakout_retest(bars or [])
+            row["breakoutRetest"] = matched
+            row["breakoutRetestNote"] = note
+        store.save_snapshot(snapshot)
+        log.info("backfilled breakoutRetest on %s cached rows", len(snapshot["rows"]))
 
     def detail(self, symbol: str, interval: str = "1d") -> dict:
         symbol = normalize_symbol(symbol)
