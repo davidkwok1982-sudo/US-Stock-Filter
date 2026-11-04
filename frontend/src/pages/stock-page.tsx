@@ -41,7 +41,7 @@ export function StockPage() {
         if (stop) return
         setDetail(next)
         sessionStorage.setItem("kailut-symbol", next.row.symbol)
-        document.title = `階律 · ${next.row.symbol}`
+        document.title = `美股篩選器 · ${next.row.symbol}`
       })
       .catch((reason: unknown) => {
         if (!stop) setError(reason instanceof Error ? reason.message : "未能載入這隻股份")
@@ -239,7 +239,7 @@ export function StockPicker() {
     .slice(0, 12)
 
   useEffect(() => {
-    document.title = "階律 · 個股詳情"
+    document.title = "美股篩選器 · 個股詳情"
   }, [])
 
   return (

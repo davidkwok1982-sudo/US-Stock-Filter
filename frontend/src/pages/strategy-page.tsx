@@ -18,7 +18,7 @@ const SCORE_ROWS = [
 
 export function StrategyPage() {
   useEffect(() => {
-    document.title = "階律 · 策略說明"
+    document.title = "美股篩選器 · 策略說明"
   }, [])
 
   return (
@@ -27,7 +27,7 @@ export function StrategyPage() {
         <p className="text-xs tracking-[0.22em] text-muted-foreground">STAGE 2</p>
         <h1 className="mt-1 font-heading text-4xl font-semibold">策略說明</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          階律把公開文章裡的第二階段條件，做成一個可重算的美股篩選。它是教育近似，不是任何專有交易系統，也不是投資建議。
+          美股篩選器把公開文章裡的第二階段條件，做成一個可重算的美股篩選。它是教育近似，不是任何專有交易系統，也不是投資建議。
         </p>
       </header>
 

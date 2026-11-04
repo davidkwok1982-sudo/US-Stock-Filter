@@ -28,7 +28,7 @@ export function Layout() {
       <header className="sticky top-0 z-40 border-b border-foreground bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
           <NavLink to="/" className="min-w-0 shrink-0">
-            <span className="font-heading text-3xl leading-none font-semibold tracking-wide">階律</span>
+            <span className="font-heading text-3xl leading-none font-semibold tracking-wide">美股篩選器</span>
             <span className="mt-1 block text-[11px] tracking-[0.18em] text-muted-foreground">美股第二階段觀察台</span>
           </NavLink>
           <nav className="ml-auto hidden items-center gap-1 md:flex" aria-label="主要">

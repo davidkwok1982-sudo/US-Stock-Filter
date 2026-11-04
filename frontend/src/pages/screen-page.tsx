@@ -23,7 +23,7 @@ const TOGGLES: { key: keyof Filters; label: string; hint: string }[] = [
 export function ScreenPage() {
   const { data, loadError, refresh } = useScreen()
   useEffect(() => {
-    document.title = "階律 · 篩選結果"
+    document.title = "美股篩選器 · 篩選結果"
   }, [])
   const [params, setParams] = useSearchParams()
   const filters = useMemo(() => readFilters(params), [params])
