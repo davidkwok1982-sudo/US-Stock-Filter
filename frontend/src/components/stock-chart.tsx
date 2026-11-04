@@ -148,8 +148,9 @@ export function StockChart({
         color: level.kind === "support" ? GOLD : BLUE,
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: level.label,
+        // Labels live in the level list under the chart; titles cover candles.
+        axisLabelVisible: false,
+        title: "",
       })
     }
 
