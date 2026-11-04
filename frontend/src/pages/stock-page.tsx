@@ -146,7 +146,8 @@ export function StockPage() {
           <section className="overflow-hidden rounded-xl bg-chart text-white">
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-[#d9d2c5]">
               <p>
-                上方指數（SPY）陰陽燭 · 升紅跌綠 · {smaHint(chartInterval)} · 下方成交量
+                上方指數（SPY）陰陽燭 · 升紅跌綠 · {smaHint(chartInterval)} · 成交量 · 相對強度
+                RS（對 SPY）· MACD 樣式
                 {chartInterval === "1d" ? " · 虛線為支持／阻力" : ""}
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -216,7 +217,7 @@ export function StockPage() {
               <p className="text-sm text-muted-foreground">近期擺動未夠密，未能標出可靠的支持或阻力。</p>
             )
           ) : (
-            <p className="text-sm text-muted-foreground">支持／阻力僅在日線顯示；週線與小時圖只顯示陰陽燭、均線與成交量。</p>
+            <p className="text-sm text-muted-foreground">支持／阻力僅在日線顯示；週線與小時圖顯示陰陽燭、均線、成交量與相對強度 RS（對 SPY）。資料點太少時會隱藏 RS 窗格。</p>
           )}
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
