@@ -139,6 +139,8 @@ export type IndexSeries = {
   symbol: string
   label: string
   closes: LinePoint[]
+  /** SPY OHLC for the top candlestick pane; optional for older API payloads. */
+  bars?: Bar[]
 }
 
 export type StockDetail = {

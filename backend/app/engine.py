@@ -275,11 +275,13 @@ def normalize_symbol(symbol: str) -> str:
 
 
 def _index_series(bars: list[dict], *, symbol: str, label: str) -> dict:
-    """Close series for chart overlay; empty closes when the benchmark is missing."""
+    """Benchmark OHLC + closes for the stock chart index pane; empty when missing."""
     closes = []
+    public = []
     for bar in bars:
         closes.append({"time": bar["time"], "value": round(bar["close"], 4 if bar["close"] < 1 else 2)})
-    return {"symbol": symbol, "label": label, "closes": closes}
+        public.append(_public_bar(bar))
+    return {"symbol": symbol, "label": label, "closes": closes, "bars": public}
 
 
 def _public_bar(bar: dict) -> dict:

@@ -123,7 +123,7 @@ export function StockPage() {
 
           <section className="overflow-hidden rounded-xl bg-chart text-white">
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-[#d9d2c5]">
-              <p>升紅跌綠 · 金線 50天 · 藍線 200天 · 紫線指數走勢（SPY，對齊起點） · 下方成交量 · 虛線為支持／阻力</p>
+              <p>上方指數（SPY）陰陽燭 · 升紅跌綠 · 金線 50天 · 藍線 200天 · 下方成交量 · 虛線為支持／阻力</p>
               <div className="flex gap-1">
                 {(
                   [
@@ -245,7 +245,7 @@ export function StockPicker() {
   return (
     <div className="mx-auto max-w-lg py-8">
       <h1 className="font-heading text-3xl font-semibold">個股詳情</h1>
-      <p className="mt-2 text-sm text-muted-foreground">從篩選結果選一隻股份，或輸入代號。圖表會畫上50／200天線、SPY指數走勢、成交量，以及近期擺動的支持與阻力。</p>
+      <p className="mt-2 text-sm text-muted-foreground">從篩選結果選一隻股份，或輸入代號。圖表上方為 SPY 指數陰陽燭，中間為股價與50／200天線，下方為成交量，並標出近期擺動的支持與阻力。</p>
       <Input
         className="mt-5"
         value={query}

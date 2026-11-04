@@ -16,7 +16,6 @@ const UP = "#c4332b"
 const DOWN = "#1c7a45"
 const GOLD = "#e0b15a"
 const BLUE = "#8eb4ea"
-const INDEX = "#c4a1ff"
 
 export function StockChart({
   bars,
@@ -42,8 +41,8 @@ export function StockChart({
     const candles = bars.filter((bar) => bar.time >= start)
     if (candles.length === 0) return
     const first = candles[0]?.time ?? start
-    const firstClose = candles[0]?.close
-    if (firstClose == null || firstClose <= 0) return
+
+    const indexBars = indexCandles(index, first)
 
     const chart = createChart(element, {
       autoSize: true,
@@ -64,15 +63,48 @@ export function StockChart({
       timeScale: { borderColor: "rgba(255,255,255,0.12)", fixLeftEdge: true, fixRightEdge: true },
     })
 
-    const candle = chart.addSeries(CandlestickSeries, {
-      upColor: UP,
-      downColor: DOWN,
-      borderUpColor: UP,
-      borderDownColor: DOWN,
-      wickUpColor: UP,
-      wickDownColor: DOWN,
-      priceLineVisible: false,
-    })
+    let stockPane = 0
+    let volumePane = 1
+
+    if (indexBars.length > 0) {
+      const spy = chart.addSeries(CandlestickSeries, {
+        upColor: UP,
+        downColor: DOWN,
+        borderUpColor: UP,
+        borderDownColor: DOWN,
+        wickUpColor: UP,
+        wickDownColor: DOWN,
+        priceLineVisible: false,
+        title: index?.symbol ?? "SPY",
+      })
+      spy.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } })
+      spy.setData(
+        indexBars.map((bar) => ({
+          time: bar.time,
+          open: bar.open,
+          high: bar.high,
+          low: bar.low,
+          close: bar.close,
+        })),
+      )
+      chart.addPane(true)
+      stockPane = 1
+      volumePane = 2
+    }
+
+    const candle = chart.addSeries(
+      CandlestickSeries,
+      {
+        upColor: UP,
+        downColor: DOWN,
+        borderUpColor: UP,
+        borderDownColor: DOWN,
+        wickUpColor: UP,
+        wickDownColor: DOWN,
+        priceLineVisible: false,
+      },
+      stockPane,
+    )
     candle.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.08 } })
     candle.setData(
       candles.map((bar) => ({
@@ -84,37 +116,31 @@ export function StockChart({
       })),
     )
 
-    const fast = chart.addSeries(LineSeries, {
-      color: GOLD,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    })
+    const fast = chart.addSeries(
+      LineSeries,
+      {
+        color: GOLD,
+        lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      },
+      stockPane,
+    )
     fast.setData(sma50.filter((point) => point.time >= first).map((point) => ({ time: point.time, value: point.value })))
 
-    const slow = chart.addSeries(LineSeries, {
-      color: BLUE,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    })
-    slow.setData(sma200.filter((point) => point.time >= first).map((point) => ({ time: point.time, value: point.value })))
-
-    const rebased = rebaseIndex(index, first, firstClose)
-    if (rebased.length > 0) {
-      const benchmark = chart.addSeries(LineSeries, {
-        color: INDEX,
+    const slow = chart.addSeries(
+      LineSeries,
+      {
+        color: BLUE,
         lineWidth: 2,
-        lineStyle: LineStyle.Solid,
         priceLineVisible: false,
-        lastValueVisible: true,
-        title: index?.symbol ?? "SPY",
+        lastValueVisible: false,
         crosshairMarkerVisible: false,
-      })
-      benchmark.setData(rebased)
-    }
+      },
+      stockPane,
+    )
+    slow.setData(sma200.filter((point) => point.time >= first).map((point) => ({ time: point.time, value: point.value })))
 
     for (const level of levels) {
       candle.createPriceLine({
@@ -136,7 +162,7 @@ export function StockChart({
         lastValueVisible: false,
         title: "成交量",
       },
-      1,
+      volumePane,
     )
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.15, bottom: 0 } })
     volume.setData(
@@ -148,16 +174,21 @@ export function StockChart({
     )
 
     const panes = chart.panes()
-    if (panes.length > 1) {
-      panes[0]?.setHeight(Math.max(280, Math.floor(element.clientHeight * 0.72)))
-      panes[1]?.setHeight(Math.max(90, Math.floor(element.clientHeight * 0.28)))
+    const height = element.clientHeight
+    if (panes.length >= 3) {
+      panes[0]?.setHeight(Math.max(110, Math.floor(height * 0.22)))
+      panes[1]?.setHeight(Math.max(240, Math.floor(height * 0.55)))
+      panes[2]?.setHeight(Math.max(80, Math.floor(height * 0.23)))
+    } else if (panes.length > 1) {
+      panes[0]?.setHeight(Math.max(280, Math.floor(height * 0.72)))
+      panes[1]?.setHeight(Math.max(90, Math.floor(height * 0.28)))
     }
 
     chart.timeScale().fitContent()
     return () => chart.remove()
   }, [bars, index, levels, range, sma50, sma200])
 
-  return <div ref={host} className="h-[480px] w-full sm:h-[620px]" />
+  return <div ref={host} className="h-[520px] w-full sm:h-[680px]" />
 }
 
 function cutoff(range: RangeKey): string {
@@ -167,14 +198,19 @@ function cutoff(range: RangeKey): string {
   return date.toISOString().slice(0, 10)
 }
 
-/** Rebase index closes onto the stock's first visible close so outperformance is visible. */
-function rebaseIndex(index: IndexSeries | null, firstTime: string, firstClose: number) {
-  const closes = (index?.closes ?? []).filter((point) => point.time >= firstTime && point.value > 0)
-  if (closes.length === 0) return []
-  const base = closes[0]?.value
-  if (base == null || base <= 0) return []
-  return closes.map((point) => ({
-    time: point.time,
-    value: Number(((firstClose * point.value) / base).toFixed(4)),
-  }))
+/** Prefer API OHLC bars; fall back to close-only synthetic candles for older payloads. */
+function indexCandles(index: IndexSeries | null, firstTime: string): Bar[] {
+  if (!index) return []
+  const bars = (index.bars ?? []).filter((bar) => bar.time >= firstTime)
+  if (bars.length > 0) return bars
+  return (index.closes ?? [])
+    .filter((point) => point.time >= firstTime && point.value > 0)
+    .map((point) => ({
+      time: point.time,
+      open: point.value,
+      high: point.value,
+      low: point.value,
+      close: point.value,
+      volume: 0,
+    }))
 }
