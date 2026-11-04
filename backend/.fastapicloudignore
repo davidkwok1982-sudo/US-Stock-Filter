@@ -1,2 +1,7 @@
 # Upload Vite build even though dist/ is gitignored
 !dist/
+cache/
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/
