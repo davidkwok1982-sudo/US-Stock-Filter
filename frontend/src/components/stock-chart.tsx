@@ -19,8 +19,11 @@ const GOLD = "#e0b15a"
 const BLUE = "#8eb4ea"
 const RS_MACD = "#e0b15a"
 const RS_SIGNAL = "#8eb4ea"
-/** Need ~26 for slow EMA + ~9 for signal before MACD is usable. */
-const RS_MIN_ALIGNED = 35
+/** Short MACD(5,13,5) on 1w RS needs lookback + ~18 points. */
+const RS_MIN_POINTS = 20
+const RS_MACD_FAST = 5
+const RS_MACD_SLOW = 13
+const RS_MACD_SIGNAL = 5
 
 export function StockChart({
   bars,
@@ -54,7 +57,7 @@ export function StockChart({
     const indexBars = indexCandles(index, first)
     // Use full history for EMA warmup, then plot from visible range.
     const indexAll = indexCandles(index, bars[0]?.time ?? first)
-    const rsMacd = computeRsMacd(bars, indexAll.length > 0 ? indexAll : indexBars).filter((point) =>
+    const rsMacd = computeRsMacd(bars, indexAll.length > 0 ? indexAll : indexBars, interval).filter((point) =>
       timeAtOrAfter(point.time, first),
     )
     const showRs = rsMacd.length > 0
@@ -174,7 +177,7 @@ export function StockChart({
         priceLineVisible: false,
         lastValueVisible: false,
         title: "RS",
-        priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
+        priceFormat: { type: "price", precision: 2, minMove: 0.01 },
       })
       hist.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.08 } })
       hist.setData(
@@ -199,7 +202,7 @@ export function StockChart({
         priceLineVisible: false,
         lastValueVisible: false,
         crosshairMarkerVisible: false,
-        priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
+        priceFormat: { type: "price", precision: 2, minMove: 0.01 },
       })
       macdLine.setData(rsMacd.map((point) => ({ time: toChartTime(point.time), value: point.macd })))
 
@@ -209,7 +212,7 @@ export function StockChart({
         priceLineVisible: false,
         lastValueVisible: false,
         crosshairMarkerVisible: false,
-        priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
+        priceFormat: { type: "price", precision: 2, minMove: 0.01 },
       })
       signalLine.setData(rsMacd.map((point) => ({ time: toChartTime(point.time), value: point.signal })))
     }
@@ -321,8 +324,14 @@ function indexCandles(index: IndexSeries | null, firstTime: ChartTime): Bar[] {
 
 type RsMacdPoint = { time: ChartTime; macd: number; signal: number; hist: number }
 
-/** RS = stockClose / spyClose; MACD(12,26,9) on that ratio. Empty if too few aligned bars. */
-function computeRsMacd(stockBars: Bar[], spyBars: Bar[]): RsMacdPoint[] {
+/**
+ * ~1-week relative strength vs SPY, then short MACD for display.
+ *
+ * Lookback by interval: 1d→5 bars, 1wk→1 bar, 1h→33 hourly bars (~1 trading week).
+ * rs1w = stockReturn(lookback) - spyReturn(lookback); scaled ×100 (percentage points).
+ * MACD(5,13,5) on that series. Above ~0 ≈ 近一星期強於／偏強於大盤.
+ */
+function computeRsMacd(stockBars: Bar[], spyBars: Bar[], interval: ChartInterval): RsMacdPoint[] {
   if (stockBars.length === 0 || spyBars.length === 0) return []
 
   const spyClose = new Map<string, number>()
@@ -330,34 +339,52 @@ function computeRsMacd(stockBars: Bar[], spyBars: Bar[]): RsMacdPoint[] {
     if (bar.close > 0) spyClose.set(timeKey(bar.time), bar.close)
   }
 
-  const rsValues: number[] = []
-  const rsTimes: ChartTime[] = []
+  const alignedTimes: ChartTime[] = []
+  const stockCloses: number[] = []
+  const spyCloses: number[] = []
   for (const bar of stockBars) {
     if (bar.close <= 0) continue
     const spy = spyClose.get(timeKey(bar.time))
     if (spy == null || spy <= 0) continue
-    rsValues.push(bar.close / spy)
-    rsTimes.push(bar.time)
+    alignedTimes.push(bar.time)
+    stockCloses.push(bar.close)
+    spyCloses.push(spy)
   }
 
-  if (rsValues.length < RS_MIN_ALIGNED) return []
+  const lookback = rsLookbackBars(interval)
+  if (alignedTimes.length < lookback + RS_MIN_POINTS) return []
 
-  const ema12 = emaSeries(rsValues, 12)
-  const ema26 = emaSeries(rsValues, 26)
+  const rs1w: number[] = []
+  const rsTimes: ChartTime[] = []
+  for (let i = lookback; i < alignedTimes.length; i++) {
+    const stockPrev = stockCloses[i - lookback]!
+    const spyPrev = spyCloses[i - lookback]!
+    if (stockPrev <= 0 || spyPrev <= 0) continue
+    const stockRet = stockCloses[i]! / stockPrev - 1
+    const spyRet = spyCloses[i]! / spyPrev - 1
+    // Percentage points so the pane scale stays readable.
+    rs1w.push((stockRet - spyRet) * 100)
+    rsTimes.push(alignedTimes[i]!)
+  }
+
+  if (rs1w.length < RS_MIN_POINTS) return []
+
+  const emaFast = emaSeries(rs1w, RS_MACD_FAST)
+  const emaSlow = emaSeries(rs1w, RS_MACD_SLOW)
 
   const macdValues: number[] = []
   const macdTimes: ChartTime[] = []
-  for (let i = 0; i < rsValues.length; i++) {
-    const fast = ema12[i]
-    const slow = ema26[i]
+  for (let i = 0; i < rs1w.length; i++) {
+    const fast = emaFast[i]
+    const slow = emaSlow[i]
     if (fast == null || slow == null) continue
     macdValues.push(fast - slow)
     macdTimes.push(rsTimes[i]!)
   }
 
-  if (macdValues.length < 9) return []
+  if (macdValues.length < RS_MACD_SIGNAL) return []
 
-  const signal = emaSeries(macdValues, 9)
+  const signal = emaSeries(macdValues, RS_MACD_SIGNAL)
   const out: RsMacdPoint[] = []
   for (let i = 0; i < macdValues.length; i++) {
     const sig = signal[i]
@@ -371,6 +398,13 @@ function computeRsMacd(stockBars: Bar[], spyBars: Bar[]): RsMacdPoint[] {
     })
   }
   return out
+}
+
+/** Trading bars that approximate one week for each chart interval. */
+function rsLookbackBars(interval: ChartInterval): number {
+  if (interval === "1wk") return 1
+  if (interval === "1h") return 33 // ~6.5 sessions × ~5 RTH hours
+  return 5 // 1d: five trading days
 }
 
 function emaSeries(values: number[], period: number): (number | null)[] {
