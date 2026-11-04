@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.engine import cooldown_block, engine
@@ -108,8 +109,24 @@ if not _default_static.is_dir():
     _default_static = _backend_root / "static"
 _STATIC_DIR = Path(os.environ.get("KAI_LUT_STATIC", str(_default_static)))
 if _STATIC_DIR.is_dir():
-    # Prefer FastAPI app.frontend() when available; otherwise StaticFiles (older pins / Docker).
-    if hasattr(app, "frontend"):
-        app.frontend("/", directory=str(_STATIC_DIR), fallback="index.html")
-    else:
-        app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="static")
+    # SPA: serve built files, and fall back to index.html for client routes like /stock/AAPL.
+    # app.frontend(..., fallback=...) has been unreliable on FastAPI Cloud for nested paths.
+    _assets_dir = _STATIC_DIR / "assets"
+    if _assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
+
+    @app.get("/{full_path:path}")
+    def spa_fallback(full_path: str):
+        if full_path.startswith("api/") or full_path == "api":
+            raise HTTPException(status_code=404, detail="Not Found")
+        candidate = (_STATIC_DIR / full_path).resolve()
+        try:
+            candidate.relative_to(_STATIC_DIR.resolve())
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="Not Found") from exc
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        index = _STATIC_DIR / "index.html"
+        if index.is_file():
+            return FileResponse(index)
+        raise HTTPException(status_code=404, detail="Not Found")
