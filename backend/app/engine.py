@@ -241,7 +241,23 @@ class Engine:
         ):
             self._backfill_score_rules(snapshot)
         if self._needs_industry_backfill(snapshot):
-            self.start_industry_backfill()
+            # FastAPI Cloud workers are short-lived; fill passHard synchronously so
+            # the heatmap is correct on the same response, then backfill the rest.
+            pass_hard = [row for row in snapshot["rows"] if row.get("passHard")]
+            missing_pass = [row for row in pass_hard if self._row_needs_industry(row)]
+            if missing_pass:
+                self._enrich_rows_with_profiles(
+                    missing_pass,
+                    fetch_missing=True,
+                    pass_hard_first=True,
+                    quiet=True,
+                )
+                meta = snapshot.setdefault("meta", {})
+                criteria = meta.setdefault("criteria", {})
+                criteria["industrySource"] = "yahoo-assetProfile"
+                store.save_snapshot(snapshot)
+            if any(self._row_needs_industry(row) for row in snapshot["rows"]):
+                self.start_industry_backfill()
         slim = []
         for row in snapshot["rows"]:
             item = dict(row)
