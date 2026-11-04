@@ -156,7 +156,16 @@ class Engine:
             raise RuntimeError(f"報價下載不足（{quote_ok}/{total}），未覆寫快取")
 
         self._set(progress=91, message="正在補齊行業分類")
-        self._enrich_rows_with_profiles(rows, fetch_missing=True, pass_hard_first=True)
+        # Cache for everyone; network fetch only passHard (5k Yahoo profile calls
+        # stall refresh). Remaining labels backfill via /api/screen / background.
+        self._enrich_rows_with_profiles(rows, fetch_missing=False, quiet=True)
+        pass_hard = [row for row in rows if row.get("passHard")]
+        self._enrich_rows_with_profiles(
+            pass_hard,
+            fetch_missing=True,
+            pass_hard_first=True,
+            quiet=False,
+        )
         self._set(progress=94, message="正在整理結果")
         rows.sort(key=lambda row: (-row["score"], row["symbol"]))
         snapshot = self._build_snapshot(
