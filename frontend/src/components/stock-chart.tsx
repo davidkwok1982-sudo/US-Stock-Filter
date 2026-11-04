@@ -11,8 +11,6 @@ import {
 
 import type { Bar, ChartInterval, ChartTime, IndexSeries, LinePoint, PriceLevel } from "@/lib/types.ts"
 
-type RangeKey = "all" | "6m" | "1y" | "2y" | "5d" | "10d" | "60d"
-
 const UP = "#c4332b"
 const DOWN = "#1c7a45"
 const SILVER = "#c9c4b8"
@@ -37,7 +35,6 @@ export function StockChart({
   sma200,
   index,
   levels,
-  range,
   interval = "1d",
 }: {
   bars: Bar[]
@@ -48,7 +45,6 @@ export function StockChart({
   sma200: LinePoint[]
   index: IndexSeries | null
   levels: PriceLevel[]
-  range: RangeKey
   interval?: ChartInterval
   symbol?: string
 }) {
@@ -57,11 +53,9 @@ export function StockChart({
   useEffect(() => {
     const element = host.current
     if (!element || bars.length === 0) return
-    // "all" = every loaded bar (default). Other keys still slice for range buttons.
-    const start = range === "all" ? null : cutoff(range, interval)
-    const candles = start == null ? bars : bars.filter((bar) => timeAtOrAfter(bar.time, start))
-    if (candles.length === 0) return
-    const first = candles[0]?.time ?? bars[0]!.time
+    // Fit all loaded bars; free zoom remains via chart interaction.
+    const candles = bars
+    const first = candles[0]!.time
 
     const indexBars = indexCandles(index, first)
     // Use full history for EMA warmup, then plot from visible range.
@@ -278,7 +272,7 @@ export function StockChart({
 
     chart.timeScale().fitContent()
     return () => chart.remove()
-  }, [bars, index, interval, levels, range, sma10, sma20, sma50, sma150, sma200])
+  }, [bars, index, interval, levels, sma10, sma20, sma50, sma150, sma200])
 
   return <div ref={host} className="h-[520px] w-full sm:h-[680px]" />
 }
@@ -303,18 +297,6 @@ function toUnix(time: ChartTime): number {
 
 function timeKey(time: ChartTime): string {
   return typeof time === "number" ? String(time) : time
-}
-
-function cutoff(range: Exclude<RangeKey, "all">, interval: ChartInterval): ChartTime {
-  const now = Date.now()
-  if (interval === "1h") {
-    const hours = range === "5d" ? 5 * 24 : range === "10d" ? 10 * 24 : 60 * 24
-    return Math.floor(now / 1000) - hours * 3600
-  }
-  const days = range === "6m" ? 190 : range === "1y" ? 372 : 760
-  const date = new Date()
-  date.setDate(date.getDate() - days)
-  return date.toISOString().slice(0, 10)
 }
 
 /** Prefer API OHLC bars; fall back to close-only synthetic candles for older payloads. */

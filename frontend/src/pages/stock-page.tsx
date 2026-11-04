@@ -18,18 +18,11 @@ import {
 import { useScreen } from "@/lib/screen-context.tsx"
 import type { ChartInterval, CompanyProfile, StockDetail } from "@/lib/types.ts"
 
-type RangeKey = "all" | "6m" | "1y" | "2y" | "5d" | "10d" | "60d"
-
 const INTERVALS: { key: ChartInterval; label: string }[] = [
   { key: "1d", label: "日線" },
   { key: "1wk", label: "週線" },
   { key: "1h", label: "小時" },
 ]
-
-function defaultRange(_interval: ChartInterval): RangeKey {
-  // Show every loaded bar; range buttons still slice on demand. fitContent in chart.
-  return "all"
-}
 
 function smaHint(interval: ChartInterval): string {
   if (interval === "1wk") return "銀線 10週 · 橙線 20週 · 金線 50週 · 綠線 150週 · 藍線 200週"
@@ -45,7 +38,6 @@ export function StockPage() {
   const [chartLoading, setChartLoading] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1d")
-  const [range, setRange] = useState<RangeKey>(defaultRange("1d"))
   const [summaryOpen, setSummaryOpen] = useState(false)
 
   const loadedSymbolRef = useRef<string>("")
@@ -129,7 +121,6 @@ export function StockPage() {
 
   function selectInterval(next: ChartInterval) {
     setChartInterval(next)
-    setRange(defaultRange(next))
   }
 
   if (!symbol) return <StockPicker />
@@ -206,30 +197,6 @@ export function StockPage() {
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-1" role="group" aria-label="顯示範圍">
-                  {(chartInterval === "1h"
-                    ? ([
-                        ["5d", "5天"],
-                        ["10d", "10天"],
-                        ["60d", "約兩月"],
-                      ] as const)
-                    : ([
-                        ["6m", "半年"],
-                        ["1y", "一年"],
-                        ["2y", "兩年"],
-                      ] as const)
-                  ).map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setRange(key)}
-                      className={`rounded px-2 py-1 ${range === key ? "bg-white/15 text-white" : "text-white/70"}`}
-                      aria-pressed={range === key}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
             {showChartSkeleton ? (
@@ -246,7 +213,6 @@ export function StockPage() {
                 sma200={detail.sma200}
                 index={detail.index ?? null}
                 levels={detail.levels}
-                range={range}
                 interval={chartInterval}
                 symbol={row.symbol}
               />
