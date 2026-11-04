@@ -77,6 +77,18 @@ def refresh(force: bool = Query(default=False)):
     }
 
 
+
+@app.get("/api/stock/{symbol}/profile")
+def stock_profile(symbol: str):
+    """Company profile / fundamentals — may hit Yahoo; keep off the chart critical path."""
+    try:
+        return engine.profile(symbol)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.get("/api/stock/{symbol}")
 def stock(symbol: str, interval: str = Query(default="1d", description="Chart timeframe: 1d, 1wk, or 1h")):
     try:

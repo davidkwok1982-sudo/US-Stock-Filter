@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from datetime import datetime, timedelta, timezone
 
 from app.config import CHUNK_SIZE, COOLDOWN_SECONDS, LIMIT, TTL_HOURS, WORKERS
@@ -381,12 +382,8 @@ class Engine:
                 quote = quote_map.get(symbol)
                 if quote and quote.get("quoteType") not in (None, "EQUITY"):
                     raise LookupError("這不是美股普通股")
-            bars = client.chart(symbol, interval=interval) or []
-            try:
-                spy = client.chart("SPY", interval=interval) or []
-            except Exception:
-                log.exception("failed to load SPY %s chart for detail overlay", interval)
-                spy = []
+            # Weekly/hourly always hit Yahoo — fetch symbol + SPY in parallel.
+            bars, spy = self._fetch_charts_parallel(client, symbol, interval)
         if not bars:
             raise LookupError("找不到這隻股份的圖表資料")
         eval_bars = bars
@@ -409,27 +406,136 @@ class Engine:
                 "industry": None,
             }
             row = evaluate(base, eval_bars, quote or {}, eval_spy)
-        fundamentals = self._fundamentals(symbol)
+        # Chart path is cache-only for fundamentals — never wait on Yahoo quoteSummary.
+        # SPA loads /api/stock/{symbol}/profile when profilePending is true.
+        fundamentals = self._fundamentals(symbol, allow_network=False)
+        detail_row, profile = self._detail_row_and_profile(row, fundamentals)
+        levels = find_levels(bars) if interval == "1d" else []
+        notes = build_notes(detail_row, levels)
+        if fundamentals is None:
+            profile_pending = True
+        elif fundamentals.get("_summaryFetched") or "summary" in fundamentals:
+            profile_pending = False
+        else:
+            # Light sector/industry cache from screen enrichment — upgrade async.
+            profile_pending = True
+        return {
+            "row": detail_row,
+            "interval": interval,
+            "bars": [_public_bar(bar) for bar in bars],
+            "sma50": _sma_points(bars, SMA_FAST),
+            "sma150": _sma_points(bars, SMA_MID),
+            "sma200": _sma_points(bars, SMA_SLOW),
+            "index": _index_series(spy, symbol="SPY", label="標普500（SPY）"),
+            "levels": levels,
+            "notes": notes,
+            "profile": profile,
+            "profilePending": profile_pending,
+            "meta": None if snapshot is None else snapshot["meta"],
+        }
+
+    def profile(self, symbol: str) -> dict:
+        """Secondary company profile fetch (may hit Yahoo). Does not block chart."""
+        symbol = normalize_symbol(symbol)
+        snapshot = store.load_snapshot()
+        row = None
+        if snapshot:
+            row = next((item for item in snapshot["rows"] if item["symbol"] == symbol), None)
+        fundamentals = self._fundamentals(
+            symbol,
+            allow_network=True,
+            network_timeout=4.0,
+            upgrade_summary=True,
+        )
+        if row is None:
+            detail_row = {
+                "symbol": symbol,
+                "name": symbol,
+                "sector": None,
+                "industry": None,
+                "pe": None,
+            }
+        else:
+            detail_row = dict(row)
+            detail_row.pop("beta", None)
+            detail_row.pop("betaBasis", None)
+        detail_row, profile = self._detail_row_and_profile(detail_row, fundamentals)
+        notes = build_notes(detail_row, [])
+        return {
+            "row": {
+                "symbol": detail_row.get("symbol"),
+                "sector": detail_row.get("sector"),
+                "industry": detail_row.get("industry"),
+                "sectorEn": detail_row.get("sectorEn"),
+                "industryEn": detail_row.get("industryEn"),
+                "pe": detail_row.get("pe"),
+                "revenueGrowth": detail_row.get("revenueGrowth"),
+                "earningsGrowth": detail_row.get("earningsGrowth"),
+                "profitMargin": detail_row.get("profitMargin"),
+            },
+            "profile": profile,
+            "notes": {"fundamental": notes.get("fundamental") or []},
+            "profilePending": False,
+        }
+
+    def _fetch_charts_parallel(self, client, symbol: str, interval: str) -> tuple[list, list]:
+        bars: list = []
+        spy: list = []
+
+        def load_symbol() -> list:
+            return client.chart(symbol, interval=interval) or []
+
+        def load_spy() -> list:
+            try:
+                return client.chart("SPY", interval=interval) or []
+            except Exception:
+                log.exception("failed to load SPY %s chart for detail overlay", interval)
+                return []
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            fut_sym = pool.submit(load_symbol)
+            fut_spy = pool.submit(load_spy)
+            bars = fut_sym.result()
+            spy = fut_spy.result()
+        return bars, spy
+
+    def _detail_row_and_profile(self, row: dict, fundamentals: dict | None) -> tuple[dict, dict | None]:
         detail_row = dict(row)
         detail_row.pop("beta", None)
         detail_row.pop("betaBasis", None)
         profile = None
-        if fundamentals:
-            if fundamentals.get("sector"):
-                detail_row["sectorEn"] = fundamentals["sector"]
-                detail_row["sector"] = sector_zh(fundamentals["sector"])
-            if fundamentals.get("industry"):
-                detail_row["industryEn"] = fundamentals["industry"]
-                detail_row["industry"] = industry_zh(fundamentals["industry"])
+        if not fundamentals:
+            return detail_row, None
+        if fundamentals.get("sector"):
+            detail_row["sectorEn"] = fundamentals["sector"]
+            detail_row["sector"] = sector_zh(fundamentals["sector"])
+        if fundamentals.get("industry"):
+            detail_row["industryEn"] = fundamentals["industry"]
+            detail_row["industry"] = industry_zh(fundamentals["industry"])
+        if "revenueGrowth" in fundamentals:
             detail_row["revenueGrowth"] = fundamentals.get("revenueGrowth")
+        if "earningsGrowth" in fundamentals:
             detail_row["earningsGrowth"] = fundamentals.get("earningsGrowth")
+        if "profitMargin" in fundamentals:
             detail_row["profitMargin"] = fundamentals.get("profitMargin")
-            if fundamentals.get("pe") and not detail_row.get("pe"):
-                detail_row["pe"] = fundamentals["pe"]
-            sector_en = fundamentals.get("sector") or detail_row.get("sectorEn")
-            industry_en = fundamentals.get("industry") or detail_row.get("industryEn")
-            sector_label = detail_row.get("sector")
-            industry_label = detail_row.get("industry")
+        if fundamentals.get("pe") and not detail_row.get("pe"):
+            detail_row["pe"] = fundamentals["pe"]
+        sector_en = fundamentals.get("sector") or detail_row.get("sectorEn")
+        industry_en = fundamentals.get("industry") or detail_row.get("industryEn")
+        sector_label = detail_row.get("sector")
+        industry_label = detail_row.get("industry")
+        # Only expose a profile card when we have something useful beyond empty fields.
+        has_card = any(
+            [
+                fundamentals.get("summary"),
+                sector_label,
+                industry_label,
+                fundamentals.get("website"),
+                fundamentals.get("employees"),
+                fundamentals.get("hq"),
+            ]
+        )
+        if has_card:
             profile = {
                 "summary": fundamentals.get("summary"),
                 "sector": sector_label,
@@ -447,22 +553,7 @@ class Engine:
                 "phone": fundamentals.get("phone"),
                 "source": "Yahoo Finance public quoteSummary (assetProfile)",
             }
-        levels = find_levels(bars) if interval == "1d" else []
-        notes = build_notes(detail_row, levels)
-        return {
-            "row": detail_row,
-            "interval": interval,
-            "bars": [_public_bar(bar) for bar in bars],
-            "sma50": _sma_points(bars, SMA_FAST),
-            "sma150": _sma_points(bars, SMA_MID),
-            "sma200": _sma_points(bars, SMA_SLOW),
-            "index": _index_series(spy, symbol="SPY", label="標普500（SPY）"),
-            "levels": levels,
-            "notes": notes,
-            "profile": profile,
-            "meta": None if snapshot is None else snapshot["meta"],
-        }
-
+        return detail_row, profile
 
     def _base_with_cached_profile(self, item: dict, quote: dict | None) -> dict:
         """Merge universe row with quote/cache sector+industry before evaluate."""
@@ -662,21 +753,62 @@ class Engine:
             with self._lock:
                 self._industry_backfill_running = False
 
-    def _fundamentals(self, symbol: str) -> dict | None:
-        cached = store.load_fundamentals(symbol)
-        cache_has_profile = bool(cached) and "summary" in cached
-        if cached and cache_has_profile and cached.get("updatedAt"):
-            stamp = datetime.fromisoformat(cached["updatedAt"])
-            if stamp.tzinfo is None:
-                stamp = stamp.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) - stamp < FUNDAMENTAL_TTL:
-                return cached
+    def _fundamentals_stamp(self, cached: dict | None) -> datetime | None:
+        if not cached or not cached.get("updatedAt"):
+            return None
         try:
-            fresh = get_client().fundamentals(symbol)
+            stamp = datetime.fromisoformat(cached["updatedAt"])
+        except ValueError:
+            return None
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        return stamp
+
+    def _fundamentals(
+        self,
+        symbol: str,
+        *,
+        allow_network: bool = True,
+        network_timeout: float = 1.5,
+        upgrade_summary: bool = False,
+    ) -> dict | None:
+        """Load fundamentals with cache-first semantics.
+
+        Previously a light sector/industry cache (no ``summary`` key) always
+        forced a Yahoo quoteSummary round-trip. When Yahoo was slow/auth-flaky
+        that stalled /api/stock for ~5s and blocked the chart.
+        """
+        cached = store.load_fundamentals(symbol)
+        stamp = self._fundamentals_stamp(cached)
+        fresh_enough = bool(stamp) and datetime.now(timezone.utc) - stamp < FUNDAMENTAL_TTL
+        has_summary = bool(cached) and ("summary" in cached)
+        if fresh_enough and cached is not None:
+            if not upgrade_summary or has_summary:
+                return cached
+            # upgrade_summary: fall through to network even with a light cache.
+        if not allow_network:
+            return cached
+
+        fresh = None
+        try:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(get_client().fundamentals, symbol)
+                try:
+                    fresh = fut.result(timeout=network_timeout)
+                except FuturesTimeout:
+                    log.warning(
+                        "fundamentals timed out for %s after %.1fs",
+                        symbol,
+                        network_timeout,
+                    )
+                    fresh = None
         except Exception:
             log.exception("fundamentals failed for %s", symbol)
             fresh = None
         if fresh:
+            # Mark that a full quoteSummary landed (summary key may still be null).
+            fresh = dict(fresh)
+            fresh["_summaryFetched"] = True
             store.save_fundamentals(symbol, fresh)
             return fresh
         return cached

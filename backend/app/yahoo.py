@@ -179,8 +179,16 @@ class YahooClient:
             if not self._crumb or self._crumb.startswith("<"):
                 raise RuntimeError("未能取得 Yahoo crumb")
 
-    def _get(self, client: httpx.Client, url: str, params: dict | None = None, auth: bool = False):
-        for attempt in range(4):
+    def _get(
+        self,
+        client: httpx.Client,
+        url: str,
+        params: dict | None = None,
+        auth: bool = False,
+        *,
+        max_attempts: int = 4,
+    ):
+        for attempt in range(max(1, max_attempts)):
             query = dict(params or {})
             if auth:
                 try:
@@ -360,12 +368,14 @@ class YahooClient:
             list(pool.map(job, symbols))
         return found
 
-    def fundamentals(self, symbol: str) -> dict | None:
+    def fundamentals(self, symbol: str, *, max_attempts: int = 2) -> dict | None:
+        # Stock detail must not stall on quoteSummary; keep attempts short.
         response = self._get(
             self._main,
             f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{quote(symbol, safe='-')}",
             params={"modules": "financialData,assetProfile,defaultKeyStatistics"},
             auth=True,
+            max_attempts=max_attempts,
         )
         if response is None:
             return None
