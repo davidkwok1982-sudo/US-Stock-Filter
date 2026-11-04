@@ -13,7 +13,7 @@ import type { Filters, SortKey } from "@/lib/types.ts"
 
 const TOGGLES: { key: keyof Filters; label: string; hint: string }[] = [
   { key: "above50", label: "高於50天線", hint: "現價高於50天線" },
-  { key: "slope", label: "均線向上", hint: "50及200天線過去約一個月都向上" },
+  { key: "slope", label: "均線向上", hint: "50／150／200天線過去約一個月都向上（硬性條件已要求；此鈕可再強調）" },
   { key: "rs", label: "跑贏 SPY", hint: "近一星期回報高於 SPY（約5個交易日）" },
   { key: "support", label: "收市近支持", hint: "最新收市價剛好落在近期擺動支持位附近（約 ±1%），允許輕微刺穿但未明顯跌破（教育約數）" },
   { key: "excludeMicro", label: "排除場外及微盤", hint: "剔除股價低於 5 美元、市值少於 3 億或場外代號" },
@@ -84,8 +84,9 @@ export function ScreenPage() {
               家數只計本宇宙（標普500 {data.meta.universe.sp500}、標普中型400 {data.meta.universe.sp400}、納指100 {data.meta.universe.ndx}，合併 {data.meta.universe.unique} 隻），不是全市場。200／100 沿用公開文章的經驗數字，只作觀察。
               SPY 近一星期 {formatPct(data.meta.spy.ret1w ?? data.meta.spy.ret6m)}。
             </p>
-            <dl className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
-              <Stat label="未過200天線" value={data.meta.summary.failSma200} />
+            <dl className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-5">
+              <Stat label="未呈價＞50＞150＞200" value={data.meta.summary.failMaStack ?? data.meta.summary.failSma200} />
+              <Stat label="均線未全部向上" value={data.meta.summary.failMaSlope ?? 0} />
               <Stat label="市值不足或未明" value={data.meta.summary.failCap} />
               <Stat label="成交額不足" value={data.meta.summary.failLiquidity} />
               <Stat label="貝他不足或未明" value={data.meta.summary.failBeta} />
@@ -139,7 +140,7 @@ export function ScreenPage() {
             <details className="text-sm text-muted-foreground">
               <summary className="cursor-pointer text-foreground">怎樣讀這張表</summary>
               <p className="mt-2 max-w-3xl leading-relaxed">
-                預設只列出通過硬性條件的股份：股價高於200天線、市值逾20億美元、日均成交額約3,000萬美元、貝他不低於1。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序，不是買賣訊號。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「收市近支持」以日線擺動低點估計支持；最新收市落在該位約 ±1% 內（可輕微刺穿、明顯跌破則否），屬教育約數。
+                預設只列出通過硬性條件的股份：現價＞50天線＞150天線＞200天線、三條均線過去約一個月都向上、市值逾20億美元、日均成交額約3,000萬美元、貝他不低於1。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序，不是買賣訊號。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「收市近支持」以日線擺動低點估計支持；最新收市落在該位約 ±1% 內（可輕微刺穿、明顯跌破則否），屬教育約數。
                 <Link to="/strategy" className="ml-2 text-foreground underline underline-offset-4">
                   策略說明
                 </Link>

@@ -12,7 +12,7 @@ from app.close_at_support import RULE_VERSION, detect_close_at_support
 from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
 from app.levels import find_levels
-from app.metrics import SCORE_RULE_VERSION, SMA_FAST, SMA_SLOW, breadth, rolling_sma
+from app.metrics import SCORE_RULE_VERSION, SMA_FAST, SMA_MID, SMA_SLOW, breadth, rolling_sma
 from app.notes import build_notes
 from app import store
 from app.universe import load_universe
@@ -207,7 +207,7 @@ class Engine:
         log.info("backfilled closeAtSupport v%s on %s cached rows", RULE_VERSION, len(snapshot["rows"]))
 
     def _backfill_score_rules(self, snapshot: dict) -> None:
-        """Recompute rs1w / score / rsBeat on cached rows when score rules change."""
+        """Recompute Stage 2 rows (hard gates, score, RS) when score rules change."""
         spy_bars = store.load_chart("SPY") or []
         updated = []
         for row in snapshot["rows"]:
@@ -357,7 +357,7 @@ class Engine:
                 "phone": fundamentals.get("phone"),
                 "source": "Yahoo Finance public quoteSummary (assetProfile)",
             }
-        # Support/resistance from the displayed series; SMA50/200 are bar windows on that series
+        # Support/resistance from the displayed series; SMA50/150/200 are bar windows on that series
         # (days / weeks / hours), matching the current daily behaviour.
         levels = find_levels(bars) if interval == "1d" else []
         notes = build_notes(detail_row, levels)
@@ -366,6 +366,7 @@ class Engine:
             "interval": interval,
             "bars": [_public_bar(bar) for bar in bars],
             "sma50": _sma_points(bars, SMA_FAST),
+            "sma150": _sma_points(bars, SMA_MID),
             "sma200": _sma_points(bars, SMA_SLOW),
             "index": _index_series(spy, symbol="SPY", label="標普500（SPY）"),
             "levels": levels,

@@ -30,11 +30,14 @@ export type ScreenRow = {
   vsSma200: number | null
   vsSma50: number | null
   sma50: number | null
+  sma150?: number | null
   sma200: number | null
   sma50Slope: number | null
+  sma150Slope?: number | null
   sma200Slope: number | null
   aboveSma50: boolean
   aboveSma200: boolean
+  maStacked?: boolean
   slopeUp: boolean
   high52: number | null
   low52: number | null
@@ -82,6 +85,8 @@ export type ScreenMeta = {
     universe: number
     pass: number
     incomplete: number
+    failMaStack?: number
+    failMaSlope?: number
     failSma200: number
     failCap: number
     failLiquidity: number
@@ -177,6 +182,7 @@ export type StockDetail = {
   interval?: ChartInterval
   bars: Bar[]
   sma50: LinePoint[]
+  sma150?: LinePoint[]
   sma200: LinePoint[]
   index: IndexSeries | null
   levels: PriceLevel[]

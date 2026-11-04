@@ -33,9 +33,9 @@ function defaultRange(interval: ChartInterval): RangeKey {
 }
 
 function smaHint(interval: ChartInterval): string {
-  if (interval === "1wk") return "金線 50週 · 藍線 200週"
-  if (interval === "1h") return "金線 50小時 · 藍線 200小時"
-  return "金線 50天 · 藍線 200天"
+  if (interval === "1wk") return "金線 50週 · 綠線 150週 · 藍線 200週"
+  if (interval === "1h") return "金線 50小時 · 綠線 150小時 · 藍線 200小時"
+  return "金線 50天 · 綠線 150天 · 藍線 200天"
 }
 
 export function StockPage() {
@@ -136,7 +136,8 @@ export function StockPage() {
           </dl>
 
           <ul className="flex flex-wrap gap-2 text-sm">
-            <Gate label="200天線" ok={row.aboveSma200} />
+            <Gate label="價＞50＞150＞200" ok={!row.failCodes.includes("ma_stack") && (row.maStacked ?? row.aboveSma200)} />
+            <Gate label="均線向上" ok={!row.failCodes.includes("ma_slope") && row.slopeUp} />
             <Gate label="市值逾20億" ok={!row.failCodes.includes("cap")} />
             <Gate label="成交額" ok={!row.failCodes.includes("liquidity")} />
             <Gate label="貝他≥1" ok={!row.failCodes.includes("beta") && !row.failCodes.includes("beta_missing")} />
@@ -197,6 +198,7 @@ export function StockPage() {
             <StockChart
               bars={detail.bars}
               sma50={detail.sma50}
+              sma150={detail.sma150 ?? []}
               sma200={detail.sma200}
               index={detail.index ?? null}
               levels={detail.levels}
@@ -277,6 +279,7 @@ export function StockPage() {
                 <Separator />
                 <dl className="space-y-1 text-sm">
                   <Pair label="50天線" value={row.sma50 == null ? "—" : formatPrice(row.sma50)} />
+                  <Pair label="150天線" value={row.sma150 == null ? "—" : formatPrice(row.sma150)} />
                   <Pair label="200天線" value={row.sma200 == null ? "—" : formatPrice(row.sma200)} />
                   <Pair label="一星期RS" value={formatPct(row.rs1w ?? null)} />
                   <Pair label="市盈率" value={row.pe == null ? "—" : `${row.pe.toFixed(1)} 倍`} />
@@ -306,7 +309,7 @@ export function StockPicker() {
   return (
     <div className="mx-auto max-w-lg py-8">
       <h1 className="font-heading text-3xl font-semibold">個股詳情</h1>
-      <p className="mt-2 text-sm text-muted-foreground">從篩選結果選一隻股份，或輸入代號。圖表上方為 SPY 指數陰陽燭，中間為股價與50／200天線，下方為成交量，並標出近期擺動的支持與阻力。</p>
+      <p className="mt-2 text-sm text-muted-foreground">從篩選結果選一隻股份，或輸入代號。圖表上方為 SPY 指數陰陽燭，中間為股價與50／150／200天線，下方為成交量，並標出近期擺動的支持與阻力。</p>
       <Input
         className="mt-5"
         value={query}

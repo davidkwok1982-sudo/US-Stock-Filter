@@ -17,6 +17,7 @@ from app.metrics import (
     RS_DAYS_3M,
     RS_DAYS_6M,
     SMA_FAST,
+    SMA_MID,
     SMA_SLOW,
     average_dollar,
     beta_vs,
@@ -28,7 +29,8 @@ from app.metrics import (
 )
 
 FAILS = {
-    "sma200": "低於200天線或數據不足",
+    "ma_stack": "未呈價＞50＞150＞200",
+    "ma_slope": "均線未全部向上",
     "cap": "市值不足20億美元或未明",
     "liquidity": "日均成交額低於3,000萬美元",
     "beta": "貝他低於1",
@@ -58,10 +60,13 @@ def evaluate(
         price = last_close
 
     sma50_series = rolling_sma(closes, SMA_FAST) if closes else []
+    sma150_series = rolling_sma(closes, SMA_MID) if closes else []
     sma200_series = rolling_sma(closes, SMA_SLOW) if closes else []
     sma50 = sma50_series[-1] if sma50_series else None
+    sma150 = sma150_series[-1] if sma150_series else None
     sma200 = sma200_series[-1] if sma200_series else None
     slope50 = sma_slope(sma50_series) if sma50_series else None
+    slope150 = sma_slope(sma150_series) if sma150_series else None
     slope200 = sma_slope(sma200_series) if sma200_series else None
 
     high_window = bars[-HIGH_DAYS:] if bars else []
@@ -116,8 +121,25 @@ def evaluate(
     industry_en = base.get("industry")
 
     fail_codes: list[str] = []
-    if not (price and sma200 and price > sma200):
-        fail_codes.append("sma200")
+    stack_ok = (
+        price is not None
+        and sma50 is not None
+        and sma150 is not None
+        and sma200 is not None
+        and price > sma50 > sma150 > sma200
+    )
+    if not stack_ok:
+        fail_codes.append("ma_stack")
+    slopes_ok = (
+        slope50 is not None
+        and slope50 > 0
+        and slope150 is not None
+        and slope150 > 0
+        and slope200 is not None
+        and slope200 > 0
+    )
+    if not slopes_ok:
+        fail_codes.append("ma_slope")
     market_cap = quote.get("marketCap")
     if market_cap is None or market_cap < MIN_MARKET_CAP:
         fail_codes.append("cap")
@@ -139,7 +161,8 @@ def evaluate(
     )
     above50 = bool(price and sma50 and price > sma50)
     above200 = bool(price and sma200 and price > sma200)
-    slope_up = bool(slope50 is not None and slope50 > 0 and slope200 is not None and slope200 > 0)
+    stacked = bool(stack_ok)
+    slope_up = bool(slopes_ok)
     near_high = bool(drawdown is not None and drawdown >= -NEAR_HIGH_WITHIN)
     close_at_support, close_at_support_note = detect_close_at_support(bars)
     score, parts = build_score(
@@ -172,11 +195,14 @@ def evaluate(
         "vsSma200": distance200,
         "vsSma50": distance50,
         "sma50": _round(sma50),
+        "sma150": _round(sma150),
         "sma200": _round(sma200),
         "sma50Slope": slope50,
+        "sma150Slope": slope150,
         "sma200Slope": slope200,
         "aboveSma50": above50,
         "aboveSma200": above200,
+        "maStacked": stacked,
         "slopeUp": slope_up,
         "high52": _round(high52),
         "low52": _round(low52),
@@ -235,7 +261,9 @@ def summarize(rows: list[dict]) -> dict:
         "universe": len(rows),
         "pass": len(passed),
         "incomplete": sum(1 for row in rows if row["incomplete"]),
-        "failSma200": has("sma200"),
+        "failMaStack": has("ma_stack"),
+        "failMaSlope": has("ma_slope"),
+        "failSma200": has("ma_stack"),  # legacy alias for older UI copies
         "failCap": has("cap"),
         "failLiquidity": has("liquidity"),
         "failBeta": has("beta") + has("beta_missing"),

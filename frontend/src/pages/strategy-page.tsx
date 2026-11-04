@@ -41,22 +41,26 @@ export function StrategyPage() {
 
       <section className="space-y-3">
         <h2 className="font-heading text-2xl">硬性條件</h2>
-        <p className="text-sm text-muted-foreground">四項都要通過，才會計入「通過家數」，也才會出現在預設表格。</p>
+        <p className="text-sm text-muted-foreground">下列都要通過，才會計入「通過家數」，也才會出現在預設表格。</p>
         <ol className="space-y-3 text-sm leading-relaxed">
           <li>
-            <span className="font-medium">1. 股價高於 200 天線。</span>
-            用拆股還原後的收市價計算簡單移動平均。現價取 Yahoo 報價；若與最後一根日線差太遠，改用日線收市價。
+            <span className="font-medium">1. 現價＞50 天線＞150 天線＞200 天線。</span>
+            用拆股還原後的收市價計算簡單移動平均。現價取 Yahoo 報價；若與最後一根日線差太遠，改用日線收市價。任一均線不足或排序不符就不放行。
           </li>
           <li>
-            <span className="font-medium">2. 市值逾 20 億美元。</span>
+            <span className="font-medium">2. 50、150、200 天線都向上。</span>
+            各以約 20 個交易日前的同一條均線比較：現值除以當時值減 1，斜率須大於 0。缺斜率或任一條走平／向下就不放行。
+          </li>
+          <li>
+            <span className="font-medium">3. 市值逾 20 億美元。</span>
             取 Yahoo 報價的市值。沒有市值就不會放行。
           </li>
           <li>
-            <span className="font-medium">3. 日均成交額約 3,000 萬美元或以上。</span>
+            <span className="font-medium">4. 日均成交額約 3,000 萬美元或以上。</span>
             優先用過去 63 個交易日的未還原收市價乘成交量再取平均。日線不足，則用三個月平均成交量乘現價，並在個股頁註明。公開文章亦有「每月成交額逾 9 億美元」的講法，大約等於每日 3,000 萬美元。
           </li>
           <li>
-            <span className="font-medium">4. 貝他不低於 1。</span>
+            <span className="font-medium">5. 貝他不低於 1。</span>
             優先用 Yahoo Finance 公布的貝他。該欄經常是空的，空則改以過去約 90 個重疊交易日的日回報對 SPY 做迴歸，表內會標「90日」。觀測少於 60 日就列為未明，不會蒙混過關。
           </li>
         </ol>
@@ -65,7 +69,7 @@ export function StrategyPage() {
       <section className="space-y-3">
         <h2 className="font-heading text-2xl">評分</h2>
         <p className="text-sm leading-relaxed">
-          通過硬性條件之後，評分只決定先後，滿分 100。一隻股份可以站上 200 天線但近一星期落後 SPY、50 天線向下，評分就會偏低。
+          通過硬性條件之後，評分只決定先後，滿分 100。一隻股份可以通過均線堆疊但近一星期落後 SPY，評分就會偏低。
         </p>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full min-w-[36rem] text-left text-sm">
@@ -93,8 +97,8 @@ export function StrategyPage() {
         <h2 className="font-heading text-2xl">可選收緊</h2>
         <p>這些開關預設大多關掉。打開之後只會縮小表格，不會改寫頂部的通過家數。</p>
         <ul className="list-disc space-y-1 pl-5">
-          <li>高於 50 天線。</li>
-          <li>50 天線與 200 天線過去約一個月都向上。</li>
+          <li>高於 50 天線（硬性條件已要求現價高於 50／150／200；此鈕保留作可選強調）。</li>
+          <li>50／150／200 天線過去約一個月都向上（硬性條件已要求；此鈕保留作可選強調）。</li>
           <li>近一星期回報跑贏 SPY（約 5 個交易日回報減 SPY 為正）。</li>
           <li>收市近支持：以日線擺動低點（兩次以上觸及，或一次清晰擺動）估計支持；最新收市落在該位約 1% 內（高於約 1.2% 或以內、輕微刺穿約 1% 內仍可；明顯低於約 1.8% 則否），優先取最接近且不大於收市價的支持。屬教育約數；全量更新時會重算，規則版本變更時亦會用已存日線重填此欄。</li>
           <li>排除場外及微盤：股價低於 5 美元、市值少於 3 億美元，或交易所屬場外。本宇宙本來就少有這類股份，20 億市值門檻已經先擋掉微盤。</li>
@@ -104,7 +108,7 @@ export function StrategyPage() {
       <section className="space-y-3 text-sm leading-relaxed">
         <h2 className="font-heading text-2xl">廣度提示</h2>
         <p>
-          通過家數達 200 或以上，標成廣度偏多；少於 100，標成宜審慎；介乎其中則為中性。這組數字來自公開文章的經驗講法。本站只數標普 500、標普中型 400 和納指 100 的合併名單，不是全美所有股票，所以應把它讀成「這批流動性較好的股份裡，有多少隻同時站上長期均線、夠大、夠活躍、貝他不低」，而不是整個美股市場的寬度。
+          通過家數達 200 或以上，標成廣度偏多；少於 100，標成宜審慎；介乎其中則為中性。這組數字來自公開文章的經驗講法。本站只數標普 500、標普中型 400 和納指 100 的合併名單，不是全美所有股票，所以應把它讀成「這批流動性較好的股份裡，有多少隻同時呈價＞50＞150＞200、均線向上、夠大、夠活躍、貝他不低」，而不是整個美股市場的寬度。
         </p>
       </section>
 
@@ -129,7 +133,7 @@ export function StrategyPage() {
               <CardTitle className="font-heading text-xl">趨勢模板</CardTitle>
             </CardHeader>
             <CardContent className="text-sm leading-relaxed text-muted-foreground">
-              預留：股價高於 150 及 200 天線、150 天線高於 200 天線、距 52 週低位與高位的距離，以及相對強度排名。接入時會做成另一個策略分頁，而不是改掉第二階段的硬性條件。
+              預留：距 52 週低位與高位的距離、相對強度排名等公開模板條件。接入時會做成另一個策略分頁；第二階段已納入價＞50＞150＞200 與均線向上。
             </CardContent>
           </Card>
           <Card>

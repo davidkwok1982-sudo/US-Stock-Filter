@@ -48,9 +48,30 @@ def build_notes(row: dict, levels: list[dict]) -> dict:
     technical: list[str] = []
     price = row.get("price")
     sma200 = row.get("sma200")
+    sma150 = row.get("sma150")
     sma50 = row.get("sma50")
 
-    if price and sma200:
+    if price and sma50 and sma150 and sma200:
+        stacked = price > sma50 > sma150 > sma200
+        slope_bits = "".join(
+            filter(
+                None,
+                [
+                    _slope_phrase("50天線", row.get("sma50Slope")),
+                    _slope_phrase("150天線", row.get("sma150Slope")),
+                    _slope_phrase("200天線", row.get("sma200Slope")),
+                ],
+            )
+        )
+        if stacked:
+            technical.append(
+                f"現價 {_px(price)} 呈價＞50＞150＞200（50 {_px(sma50)}、150 {_px(sma150)}、200 {_px(sma200)}）。{slope_bits}"
+            )
+        else:
+            technical.append(
+                f"現價 {_px(price)} 未呈價＞50＞150＞200（50 {_px(sma50)}、150 {_px(sma150)}、200 {_px(sma200)}）。{slope_bits}"
+            )
+    elif price and sma200:
         distance = price / sma200 - 1
         slope = _slope_phrase("200天線", row.get("sma200Slope"))
         if distance > 0:
@@ -62,9 +83,9 @@ def build_notes(row: dict, levels: list[dict]) -> dict:
                 f"現價 {_px(price)}，低於200天線 {_pct(distance)}。{slope}尚未符合第二階段的長期條件。"
             )
     else:
-        technical.append("日線不足以計算200天線，未能判斷是否處於第二階段。")
+        technical.append("日線不足以計算均線堆疊，未能判斷是否處於第二階段。")
 
-    if price and sma50:
+    if price and sma50 and not (sma150 and sma200):
         gap = price / sma50 - 1
         slope = _slope_phrase("50天線", row.get("sma50Slope"))
         if gap >= 0:

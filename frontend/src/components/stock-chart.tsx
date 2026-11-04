@@ -28,6 +28,7 @@ const RS_MACD_SIGNAL = 5
 export function StockChart({
   bars,
   sma50,
+  sma150 = [],
   sma200,
   index,
   levels,
@@ -36,6 +37,7 @@ export function StockChart({
 }: {
   bars: Bar[]
   sma50: LinePoint[]
+  sma150?: LinePoint[]
   sma200: LinePoint[]
   index: IndexSeries | null
   levels: PriceLevel[]
@@ -129,6 +131,19 @@ export function StockChart({
     })
     fast.setData(
       sma50
+        .filter((point) => timeAtOrAfter(point.time, first))
+        .map((point) => ({ time: toChartTime(point.time), value: point.value })),
+    )
+
+    const mid = stockPane.addSeries(LineSeries, {
+      color: "#9ec5b0",
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+    })
+    mid.setData(
+      sma150
         .filter((point) => timeAtOrAfter(point.time, first))
         .map((point) => ({ time: toChartTime(point.time), value: point.value })),
     )
@@ -272,7 +287,7 @@ export function StockChart({
 
     chart.timeScale().fitContent()
     return () => chart.remove()
-  }, [bars, index, interval, levels, range, sma50, sma200])
+  }, [bars, index, interval, levels, range, sma50, sma150, sma200])
 
   return <div ref={host} className="h-[520px] w-full sm:h-[680px]" />
 }

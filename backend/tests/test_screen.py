@@ -75,6 +75,37 @@ def _paired(n: int = 280):
         day += timedelta(days=1)
     return stock_bars, spy_bars
 
+def _uptrend_pair(n: int = 280):
+    """Steady climb so price > SMA50 > SMA150 > SMA200 and all slopes > 0."""
+    day = date(2024, 1, 2)
+    spy = 400.0
+    stock = 60.0
+    spy_bars = []
+    stock_bars = []
+    for index in range(n):
+        while day.weekday() >= 5:
+            day += timedelta(days=1)
+        # Mild market drift + stronger stock climb keeps beta-like co-movement positive.
+        spy *= 1.0012
+        stock *= 1.0035 + (0.0004 if index % 7 == 0 else 0.0)
+        stamp = day.isoformat()
+
+        def bar(price: float, shares: float) -> dict:
+            return {
+                "time": stamp,
+                "open": price * 0.995,
+                "high": price * 1.01,
+                "low": price * 0.99,
+                "close": price,
+                "volume": shares,
+                "dollar": price * shares,
+            }
+
+        spy_bars.append(bar(spy, 80_000_000))
+        stock_bars.append(bar(stock, 4_000_000))
+        day += timedelta(days=1)
+    return stock_bars, spy_bars
+
 
 def test_score_weights_sum_to_100():
     assert sum(SCORE_MAX.values()) == 100
@@ -115,7 +146,7 @@ def test_beta_recovers_planted_relationship():
 
 
 def test_uptrend_passes_stage_two():
-    stock_bars, spy_bars = _paired()
+    stock_bars, spy_bars = _uptrend_pair()
     quote = {
         "price": stock_bars[-1]["close"],
         "changePct": 0.01,
@@ -132,9 +163,14 @@ def test_uptrend_passes_stage_two():
         stock_bars,
         quote,
         spy_bars,
+        vendor_beta=1.3,
     )
     assert row["passHard"] is True
     assert row["aboveSma200"] is True
+    assert row["maStacked"] is True
+    assert row["slopeUp"] is True
+    assert row["sma150"] is not None
+    assert row["price"] > row["sma50"] > row["sma150"] > row["sma200"]
     assert row["beta"] is not None and row["beta"] >= 1
     assert row["dollarVolume"] >= 30_000_000
     assert row["sector"] == "資訊科技"
@@ -148,7 +184,7 @@ def test_uptrend_passes_stage_two():
 
 
 def test_vendor_beta_is_preferred_over_the_90_day_estimate():
-    stock_bars, spy_bars = _paired()
+    stock_bars, spy_bars = _uptrend_pair()
     quote = {
         "price": stock_bars[-1]["close"],
         "marketCap": 80_000_000_000,
@@ -166,7 +202,7 @@ def test_vendor_beta_is_preferred_over_the_90_day_estimate():
     assert "beta_missing" not in high["failCodes"]
 
 
-def test_downtrend_fails_long_average():
+def test_downtrend_fails_ma_stack():
     closes = [200 - index * 0.4 for index in range(260)]
     bars = _bars(date(2024, 1, 2), closes, volume=5_000_000)
     _, spy_bars = _paired()
@@ -183,16 +219,46 @@ def test_downtrend_fails_long_average():
         spy_bars,
     )
     assert row["passHard"] is False
-    assert "sma200" in row["failCodes"]
+    assert "ma_stack" in row["failCodes"]
+    assert "ma_slope" in row["failCodes"]
+
+
+def test_price_above_200_but_not_stacked_fails():
+    """Price > SMA200 is no longer enough; need price > 50 > 150 > 200."""
+    # Climb, then mild pullback: last price still > SMA200 but below SMA50 (broken stack).
+    closes = [80 + i * 0.3 for i in range(250)]
+    peak = closes[-1]
+    closes.extend([peak * (1 - 0.004 * i) for i in range(1, 21)])
+    bars = _bars(date(2024, 1, 2), closes, volume=5_000_000)
+    _, spy_bars = _uptrend_pair(n=len(closes) + 20)
+    quote = {
+        "price": bars[-1]["close"],
+        "marketCap": 40_000_000_000,
+        "quoteType": "EQUITY",
+        "exchangeName": "NYSE",
+    }
+    row = evaluate(
+        {"symbol": "MIX", "name": "Mixed", "groups": ["sp500"], "sector": None, "industry": None},
+        bars,
+        quote,
+        spy_bars,
+        vendor_beta=1.2,
+    )
+    assert row["sma50"] is not None and row["sma150"] is not None and row["sma200"] is not None
+    assert row["price"] > row["sma200"]
+    assert not (row["price"] > row["sma50"] > row["sma150"] > row["sma200"])
+    assert row["passHard"] is False
+    assert "ma_stack" in row["failCodes"]
 
 
 def test_notes_include_disclaimer_and_bounds():
-    stock_bars, spy_bars = _paired()
+    stock_bars, spy_bars = _uptrend_pair()
     row = evaluate(
         {"symbol": "EXM", "name": "Example", "groups": ["ndx"], "sector": "Technology", "industry": "Software"},
         stock_bars,
         {"price": stock_bars[-1]["close"], "marketCap": 50e9, "quoteType": "EQUITY", "exchangeName": "NasdaqGS", "pe": 22},
         spy_bars,
+        vendor_beta=1.2,
     )
     row["revenueGrowth"] = 0.12
     levels = find_levels(stock_bars)
@@ -357,12 +423,13 @@ def test_close_at_support_false_when_clearly_broken():
 
 
 def test_evaluate_includes_close_at_support_flag():
-    stock_bars, spy_bars = _paired()
+    stock_bars, spy_bars = _uptrend_pair()
     row = evaluate(
         {"symbol": "EXM", "name": "Example", "groups": ["sp500"], "sector": None, "industry": None},
         stock_bars,
         {"price": stock_bars[-1]["close"], "marketCap": 80e9, "quoteType": "EQUITY", "exchangeName": "NasdaqGS"},
         spy_bars,
+        vendor_beta=1.2,
     )
     assert "closeAtSupport" in row
     assert isinstance(row["closeAtSupport"], bool)
