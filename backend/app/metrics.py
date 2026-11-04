@@ -1,6 +1,6 @@
 """Stage 2 maths: moving averages, beta, relative strength, and the rank score.
 
-Thresholds follow publicly described J Law / Weinstein Stage 2 filters.
+Thresholds follow publicly described Stage 2 filters.
 This is an educational approximation, not a proprietary indicator.
 """
 

@@ -24,20 +24,20 @@ export function StrategyPage() {
   return (
     <article className="mx-auto max-w-3xl space-y-8 pb-8">
       <header>
-        <p className="text-xs tracking-[0.22em] text-muted-foreground">J LAW STAGE 2</p>
+        <p className="text-xs tracking-[0.22em] text-muted-foreground">STAGE 2</p>
         <h1 className="mt-1 font-heading text-4xl font-semibold">策略說明</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          階律把公開文章裡的 J Law／Stan Weinstein 第二階段條件，做成一個可重算的美股篩選。它是教育近似，不是 J Law 的專有系統，也不是投資建議。
+          階律把公開文章裡的第二階段條件，做成一個可重算的美股篩選。它是教育近似，不是任何專有交易系統，也不是投資建議。
         </p>
       </header>
 
       <section className="space-y-3 text-sm leading-relaxed">
         <h2 className="font-heading text-2xl">這頁在做甚麼</h2>
         <p>
-          Weinstein 把股價相對 200 天線的位置分成四個階段。第一階段是底部整固，均線走平。第二階段是上升趨勢，股價站上並通常帶動向上的長期均線。第三階段見頂派發。第四階段跌破長期均線。
+          股價相對 200 天線的位置可分成四個階段。第一階段是底部整固，均線走平。第二階段是上升趨勢，股價站上並通常帶動向上的長期均線。第三階段見頂派發。第四階段跌破長期均線。
         </p>
         <p>
-          公開流傳的 J Law TradingView 篩選，是在第二階段上再加上市值、流動性和貝他，讓名單集中在夠大、夠活躍、波幅不低於大市的美股。本站把這些條件寫成可檢查的數字，並用評分在通過名單裡排序。
+          公開流傳的第二階段篩選，會再加上市值、流動性和貝他，讓名單集中在夠大、夠活躍、波幅不低於大市的美股。本站把這些條件寫成可檢查的數字，並用評分在通過名單裡排序。
         </p>
       </section>
 
@@ -128,7 +128,7 @@ export function StrategyPage() {
           <Card>
             <CardHeader>
               <Badge variant="outline">即將推出</Badge>
-              <CardTitle className="font-heading text-xl">Minervini 趨勢模板</CardTitle>
+              <CardTitle className="font-heading text-xl">趨勢模板</CardTitle>
             </CardHeader>
             <CardContent className="text-sm leading-relaxed text-muted-foreground">
               預留：股價高於 150 及 200 天線、150 天線高於 200 天線、距 52 週低位與高位的距離，以及相對強度排名。接入時會做成另一個策略分頁，而不是改掉第二階段的硬性條件。
@@ -137,7 +137,7 @@ export function StrategyPage() {
           <Card>
             <CardHeader>
               <Badge variant="outline">即將推出</Badge>
-              <CardTitle className="font-heading text-xl">O'Neil CAN SLIM</CardTitle>
+              <CardTitle className="font-heading text-xl">成長股法則</CardTitle>
             </CardHeader>
             <CardContent className="text-sm leading-relaxed text-muted-foreground">
               預留：盈利與銷售增長、接近新高、領先股與需求等公開框架。基本因素目前只在個股頁作短註，尚未構成篩選。
@@ -152,7 +152,7 @@ export function StrategyPage() {
         <h2 className="font-heading text-2xl">免責</h2>
         <p className="font-medium">短線觀察，非投資建議。</p>
         <p>
-          本站與 J Law、Stan Weinstein、Mark Minervini、William O'Neil 及其公司均無關聯，亦未獲授權。名稱只為方便識別公開流傳的篩選條件。計算結果可能因免費數據、貝他窗口和指數成份變動而與任何商業篩選器不同。不要單憑這張表決定買賣。
+          本站按公開流傳的篩選條件作教育近似，與任何商業篩選器或其作者無關聯，亦未獲授權。計算結果可能因免費數據、貝他窗口和指數成份變動而與其他工具不同。不要單憑這張表決定買賣。
         </p>
         <p>
           <Link to="/" className="underline underline-offset-4">

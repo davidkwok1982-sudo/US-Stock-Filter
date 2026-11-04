@@ -56,15 +56,15 @@ export function ScreenPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs tracking-[0.22em] text-muted-foreground">STRATEGY</p>
-          <h1 className="font-heading text-3xl font-semibold">J Law 第二階段</h1>
+          <h1 className="font-heading text-3xl font-semibold">階律篩選</h1>
         </div>
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="策略">
           <Badge>使用中</Badge>
           <Button asChild variant="outline" size="sm">
-            <Link to="/strategy#upcoming">Minervini · 即將推出</Link>
+            <Link to="/strategy#upcoming">趨勢模板 · 即將推出</Link>
           </Button>
           <Button asChild variant="outline" size="sm">
-            <Link to="/strategy#upcoming">O'Neil · 即將推出</Link>
+            <Link to="/strategy#upcoming">成長股法則 · 即將推出</Link>
           </Button>
         </div>
       </div>

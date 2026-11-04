@@ -63,7 +63,7 @@ export function Layout() {
       </main>
 
       <footer className="mx-auto hidden max-w-6xl px-4 pb-10 text-xs leading-relaxed text-muted-foreground md:block">
-        階律與 J Law、Stan Weinstein 及其公司無關。篩選只按公開描述的第二階段條件作教育近似，短線觀察，非投資建議。
+        篩選只按公開描述的第二階段條件作教育近似，短線觀察，非投資建議。
       </footer>
 
       <nav

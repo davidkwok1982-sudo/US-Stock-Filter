@@ -5,7 +5,7 @@ from __future__ import annotations
 DISCLAIMER = "短線觀察，非投資建議。"
 DISCLAIMER_LONG = (
     "短線觀察，非投資建議。本內容只按公開描述的第二階段條件作教育用途近似，"
-    "並非 J Law 的專有系統，亦不構成招攬或買賣建議。"
+    "並非任何專有交易系統，亦不構成招攬或買賣建議。"
 )
 
 

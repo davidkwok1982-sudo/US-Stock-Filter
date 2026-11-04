@@ -1,10 +1,10 @@
 # 階律
 
-美股第二階段觀察台。按公開描述的 J Law／Stan Weinstein Stage 2 條件篩選標普 500、標普中型 400 與納斯達克 100，並在個股頁畫出蠟燭圖、50／200 天線和近似支持／阻力。
+美股第二階段觀察台。按公開描述的 Stage 2／第二階段條件篩選標普 500、標普中型 400 與納斯達克 100，並在個股頁畫出蠟燭圖、50／200 天線和近似支持／阻力。
 
-這是教育近似，不是 J Law 的專有系統，亦非投資建議。介面為繁體中文（香港用語，升紅跌綠）。
+這是教育近似，不是任何專有交易系統，亦非投資建議。介面為繁體中文（香港用語，升紅跌綠）。
 
-Minervini 趨勢模板與 O'Neil CAN SLIM 只預留了策略位置，尚未計算。
+趨勢模板與成長股法則只預留了策略位置，尚未計算。
 
 ## 本地啟動
 
@@ -82,4 +82,4 @@ cd ../frontend && npx tsc -b --noEmit
 
 ## 之後加策略
 
-`backend/app/strategies.py` 登記策略編號。`GET /api/screen?strategy=minervini` 目前回 501。第二階段的計算在 `backend/app/evaluate.py` 與 `metrics.py`。新策略可以沿用同一套 Yahoo 快取，另寫一個 `evaluate`，再在前端策略分頁接上。
+`backend/app/strategies.py` 登記策略編號。`GET /api/screen?strategy=minervini`（內部策略 id，即將推出）目前回 501。第二階段的計算在 `backend/app/evaluate.py` 與 `metrics.py`。新策略可以沿用同一套 Yahoo 快取，另寫一個 `evaluate`，再在前端策略分頁接上。
