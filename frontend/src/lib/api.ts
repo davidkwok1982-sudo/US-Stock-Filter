@@ -1,4 +1,4 @@
-import type { ScreenResponse, StockDetail } from "./types.ts"
+import type { ChartInterval, ScreenResponse, StockDetail } from "./types.ts"
 
 async function readError(response: Response, fallback: string): Promise<string> {
   try {
@@ -16,8 +16,12 @@ export async function fetchScreen(): Promise<ScreenResponse> {
   return response.json() as Promise<ScreenResponse>
 }
 
-export async function fetchStock(symbol: string): Promise<StockDetail> {
-  const response = await fetch(`/api/stock/${encodeURIComponent(symbol)}`)
+export async function fetchStock(symbol: string, interval: ChartInterval = "1d"): Promise<StockDetail> {
+  const params = new URLSearchParams()
+  if (interval && interval !== "1d") params.set("interval", interval)
+  const query = params.toString()
+  const url = `/api/stock/${encodeURIComponent(symbol)}${query ? `?${query}` : ""}`
+  const response = await fetch(url)
   if (!response.ok) throw new Error(await readError(response, "未能載入這隻股份"))
   return response.json() as Promise<StockDetail>
 }

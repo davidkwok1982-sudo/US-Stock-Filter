@@ -75,9 +75,9 @@ def refresh(force: bool = Query(default=False)):
 
 
 @app.get("/api/stock/{symbol}")
-def stock(symbol: str):
+def stock(symbol: str, interval: str = Query(default="1d", description="Chart timeframe: 1d, 1wk, or 1h")):
     try:
-        return engine.detail(symbol)
+        return engine.detail(symbol, interval=interval)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except LookupError as exc:

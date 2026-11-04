@@ -15,7 +15,7 @@ from app.metrics import SMA_FAST, SMA_SLOW, breadth, rolling_sma
 from app.notes import build_notes
 from app import store
 from app.universe import load_universe
-from app.yahoo import get_client
+from app.yahoo import get_client, normalize_interval
 
 log = logging.getLogger("kailut")
 
@@ -174,35 +174,61 @@ class Engine:
             "refresh": refresh,
         }
 
-    def detail(self, symbol: str) -> dict:
+    def detail(self, symbol: str, interval: str = "1d") -> dict:
         symbol = normalize_symbol(symbol)
+        interval = normalize_interval(interval)
         snapshot = store.load_snapshot()
         row = None
         if snapshot:
             row = next((item for item in snapshot["rows"] if item["symbol"] == symbol), None)
-        bars = store.load_chart(symbol)
         client = get_client()
         quote = None
-        if bars is None or row is None:
-            quote_map = client.quotes([symbol])
-            quote = quote_map.get(symbol)
-            if quote and quote.get("quoteType") not in (None, "EQUITY"):
-                raise LookupError("這不是美股普通股")
-        if bars is None:
-            bars = client.chart(symbol)
-            if bars:
-                store.save_chart(symbol, bars)
-        if not bars:
-            raise LookupError("找不到這隻股份的日線")
-        spy = store.load_chart("SPY") or []
-        if not spy:
+        # Daily bars stay on the refresh SQLite cache; weekly/hourly are fetched live so
+        # the screen cache is not mixed with other granularities.
+        if interval == "1d":
+            bars = store.load_chart(symbol)
+            if bars is None or row is None:
+                quote_map = client.quotes([symbol])
+                quote = quote_map.get(symbol)
+                if quote and quote.get("quoteType") not in (None, "EQUITY"):
+                    raise LookupError("這不是美股普通股")
+            if bars is None:
+                bars = client.chart(symbol, interval="1d")
+                if bars:
+                    store.save_chart(symbol, bars)
+            spy = store.load_chart("SPY") or []
+            if not spy:
+                try:
+                    spy = client.chart("SPY", interval="1d") or []
+                    if spy:
+                        store.save_chart("SPY", spy)
+                except Exception:
+                    log.exception("failed to load SPY chart for detail overlay")
+                    spy = []
+        else:
+            if row is None:
+                quote_map = client.quotes([symbol])
+                quote = quote_map.get(symbol)
+                if quote and quote.get("quoteType") not in (None, "EQUITY"):
+                    raise LookupError("這不是美股普通股")
+            bars = client.chart(symbol, interval=interval) or []
             try:
-                spy = client.chart("SPY") or []
-                if spy:
-                    store.save_chart("SPY", spy)
+                spy = client.chart("SPY", interval=interval) or []
             except Exception:
-                log.exception("failed to load SPY chart for detail overlay")
+                log.exception("failed to load SPY %s chart for detail overlay", interval)
                 spy = []
+        if not bars:
+            raise LookupError("找不到這隻股份的圖表資料")
+        # Evaluate / score always use daily bars when available so Stage 2 maths stay consistent.
+        eval_bars = bars
+        eval_spy = spy
+        if interval != "1d":
+            daily = store.load_chart(symbol)
+            daily_spy = store.load_chart("SPY") or []
+            if daily:
+                eval_bars = daily
+            if daily_spy:
+                eval_spy = daily_spy
         if row is None:
             if quote is None:
                 quote = client.quotes([symbol]).get(symbol) or {}
@@ -215,9 +241,9 @@ class Engine:
             }
             row = evaluate(
                 base,
-                bars,
+                eval_bars,
                 quote or {},
-                spy,
+                eval_spy,
                 vendor_beta=client.vendor_beta(symbol),
             )
         fundamentals = self._fundamentals(symbol)
@@ -234,10 +260,13 @@ class Engine:
             detail_row["profitMargin"] = fundamentals.get("profitMargin")
             if fundamentals.get("pe") and not detail_row.get("pe"):
                 detail_row["pe"] = fundamentals["pe"]
-        levels = find_levels(bars)
+        # Support/resistance from the displayed series; SMA50/200 are bar windows on that series
+        # (days / weeks / hours), matching the current daily behaviour.
+        levels = find_levels(bars) if interval == "1d" else []
         notes = build_notes(detail_row, levels)
         return {
             "row": detail_row,
+            "interval": interval,
             "bars": [_public_bar(bar) for bar in bars],
             "sma50": _sma_points(bars, SMA_FAST),
             "sma200": _sma_points(bars, SMA_SLOW),
@@ -285,8 +314,9 @@ def _index_series(bars: list[dict], *, symbol: str, label: str) -> dict:
 
 
 def _public_bar(bar: dict) -> dict:
+    time = bar["time"]
     return {
-        "time": bar["time"],
+        "time": int(time) if isinstance(time, (int, float)) else time,
         "open": round(bar["open"], 4 if bar["open"] < 1 else 2),
         "high": round(bar["high"], 4 if bar["high"] < 1 else 2),
         "low": round(bar["low"], 4 if bar["low"] < 1 else 2),

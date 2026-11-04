@@ -6,11 +6,12 @@ import {
   LineSeries,
   LineStyle,
   createChart,
+  type Time,
 } from "lightweight-charts"
 
-import type { Bar, IndexSeries, LinePoint, PriceLevel } from "@/lib/types.ts"
+import type { Bar, ChartInterval, ChartTime, IndexSeries, LinePoint, PriceLevel } from "@/lib/types.ts"
 
-type RangeKey = "6m" | "1y" | "2y"
+type RangeKey = "6m" | "1y" | "2y" | "5d" | "10d" | "60d"
 
 const UP = "#c4332b"
 const DOWN = "#1c7a45"
@@ -24,6 +25,7 @@ export function StockChart({
   index,
   levels,
   range,
+  interval = "1d",
 }: {
   bars: Bar[]
   sma50: LinePoint[]
@@ -31,14 +33,15 @@ export function StockChart({
   index: IndexSeries | null
   levels: PriceLevel[]
   range: RangeKey
+  interval?: ChartInterval
 }) {
   const host = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const element = host.current
     if (!element || bars.length === 0) return
-    const start = cutoff(range)
-    const candles = bars.filter((bar) => bar.time >= start)
+    const start = cutoff(range, interval)
+    const candles = bars.filter((bar) => timeAtOrAfter(bar.time, start))
     if (candles.length === 0) return
     const first = candles[0]?.time ?? start
 
@@ -60,7 +63,13 @@ export function StockChart({
         horzLines: { color: "rgba(255,255,255,0.045)" },
       },
       rightPriceScale: { borderColor: "rgba(255,255,255,0.12)" },
-      timeScale: { borderColor: "rgba(255,255,255,0.12)", fixLeftEdge: true, fixRightEdge: true },
+      timeScale: {
+        borderColor: "rgba(255,255,255,0.12)",
+        fixLeftEdge: true,
+        fixRightEdge: true,
+        timeVisible: interval === "1h",
+        secondsVisible: false,
+      },
     })
 
     let stockPane = 0
@@ -80,7 +89,7 @@ export function StockChart({
       spy.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } })
       spy.setData(
         indexBars.map((bar) => ({
-          time: bar.time,
+          time: toChartTime(bar.time),
           open: bar.open,
           high: bar.high,
           low: bar.low,
@@ -108,7 +117,7 @@ export function StockChart({
     candle.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.08 } })
     candle.setData(
       candles.map((bar) => ({
-        time: bar.time,
+        time: toChartTime(bar.time),
         open: bar.open,
         high: bar.high,
         low: bar.low,
@@ -127,7 +136,11 @@ export function StockChart({
       },
       stockPane,
     )
-    fast.setData(sma50.filter((point) => point.time >= first).map((point) => ({ time: point.time, value: point.value })))
+    fast.setData(
+      sma50
+        .filter((point) => timeAtOrAfter(point.time, first))
+        .map((point) => ({ time: toChartTime(point.time), value: point.value })),
+    )
 
     const slow = chart.addSeries(
       LineSeries,
@@ -140,7 +153,11 @@ export function StockChart({
       },
       stockPane,
     )
-    slow.setData(sma200.filter((point) => point.time >= first).map((point) => ({ time: point.time, value: point.value })))
+    slow.setData(
+      sma200
+        .filter((point) => timeAtOrAfter(point.time, first))
+        .map((point) => ({ time: toChartTime(point.time), value: point.value })),
+    )
 
     for (const level of levels) {
       candle.createPriceLine({
@@ -167,7 +184,7 @@ export function StockChart({
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.15, bottom: 0 } })
     volume.setData(
       candles.map((bar) => ({
-        time: bar.time,
+        time: toChartTime(bar.time),
         value: bar.volume,
         color: bar.close >= bar.open ? "rgba(196,51,43,0.55)" : "rgba(28,122,69,0.55)",
       })),
@@ -186,12 +203,35 @@ export function StockChart({
 
     chart.timeScale().fitContent()
     return () => chart.remove()
-  }, [bars, index, levels, range, sma50, sma200])
+  }, [bars, index, interval, levels, range, sma50, sma200])
 
   return <div ref={host} className="h-[520px] w-full sm:h-[680px]" />
 }
 
-function cutoff(range: RangeKey): string {
+function toChartTime(time: ChartTime): Time {
+  if (typeof time === "number") return time as Time
+  return time as Time
+}
+
+function timeAtOrAfter(time: ChartTime, start: ChartTime): boolean {
+  if (typeof time === "number" || typeof start === "number") {
+    return toUnix(time) >= toUnix(start)
+  }
+  return time >= start
+}
+
+function toUnix(time: ChartTime): number {
+  if (typeof time === "number") return time
+  if (time.length <= 10) return Math.floor(new Date(`${time}T00:00:00Z`).getTime() / 1000)
+  return Math.floor(new Date(time).getTime() / 1000)
+}
+
+function cutoff(range: RangeKey, interval: ChartInterval): ChartTime {
+  const now = Date.now()
+  if (interval === "1h") {
+    const hours = range === "5d" ? 5 * 24 : range === "10d" ? 10 * 24 : 60 * 24
+    return Math.floor(now / 1000) - hours * 3600
+  }
   const days = range === "6m" ? 190 : range === "1y" ? 372 : 760
   const date = new Date()
   date.setDate(date.getDate() - days)
@@ -199,12 +239,12 @@ function cutoff(range: RangeKey): string {
 }
 
 /** Prefer API OHLC bars; fall back to close-only synthetic candles for older payloads. */
-function indexCandles(index: IndexSeries | null, firstTime: string): Bar[] {
+function indexCandles(index: IndexSeries | null, firstTime: ChartTime): Bar[] {
   if (!index) return []
-  const bars = (index.bars ?? []).filter((bar) => bar.time >= firstTime)
+  const bars = (index.bars ?? []).filter((bar) => timeAtOrAfter(bar.time, firstTime))
   if (bars.length > 0) return bars
   return (index.closes ?? [])
-    .filter((point) => point.time >= firstTime && point.value > 0)
+    .filter((point) => timeAtOrAfter(point.time, firstTime) && point.value > 0)
     .map((point) => ({
       time: point.time,
       open: point.value,

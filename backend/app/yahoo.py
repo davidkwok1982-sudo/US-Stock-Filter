@@ -61,7 +61,25 @@ def normalize_quote(payload: dict) -> dict:
     }
 
 
-def parse_chart(payload: dict) -> list[dict] | None:
+# Chart interval -> Yahoo query. Weekly uses 5y so SMA200 (200 weeks) can form.
+# Hourly uses 60d (Yahoo's practical 1h window); SMA50/200 stay bar-count windows.
+CHART_INTERVALS = {
+    "1d": {"interval": "1d", "range": "2y", "intraday": False},
+    "1wk": {"interval": "1wk", "range": "5y", "intraday": False},
+    "1h": {"interval": "1h", "range": "60d", "intraday": True},
+}
+
+
+def normalize_interval(interval: str | None) -> str:
+    key = (interval or "1d").strip().lower()
+    aliases = {"d": "1d", "day": "1d", "daily": "1d", "w": "1wk", "wk": "1wk", "week": "1wk", "weekly": "1wk", "h": "1h", "hour": "1h", "hourly": "1h", "1hour": "1h"}
+    key = aliases.get(key, key)
+    if key not in CHART_INTERVALS:
+        raise ValueError("不支援這個週期（可用 1d、1wk、1h）")
+    return key
+
+
+def parse_chart(payload: dict, *, intraday: bool = False) -> list[dict] | None:
     result = (payload.get("chart") or {}).get("result") or []
     if not result:
         return None
@@ -74,7 +92,7 @@ def parse_chart(payload: dict) -> list[dict] | None:
     lows = quote_block.get("low") or []
     closes = quote_block.get("close") or []
     volumes = quote_block.get("volume") or []
-    merged: dict[str, dict] = {}
+    merged: dict[str | int, dict] = {}
     for index, ts in enumerate(timestamps):
         close = closes[index] if index < len(closes) else None
         open_ = opens[index] if index < len(opens) else None
@@ -91,10 +109,18 @@ def parse_chart(payload: dict) -> list[dict] | None:
             factor = adj / close
             if factor <= 0 or factor > 1000 or factor < 0.001:
                 continue
-        day = datetime.fromtimestamp(int(ts), NY).date().isoformat()
+        stamp = int(ts)
         share_volume = float(volume or 0)
-        merged[day] = {
-            "time": day,
+        # Intraday: unix seconds for lightweight-charts; daily/weekly: YYYY-MM-DD.
+        if intraday:
+            key: str | int = stamp
+            time_value: str | int = stamp
+        else:
+            day = datetime.fromtimestamp(stamp, NY).date().isoformat()
+            key = day
+            time_value = day
+        merged[key] = {
+            "time": time_value,
             "open": open_ * factor,
             "high": high * factor,
             "low": low * factor,
@@ -104,7 +130,7 @@ def parse_chart(payload: dict) -> list[dict] | None:
         }
     if not merged:
         return None
-    return [merged[day] for day in sorted(merged)]
+    return [merged[key] for key in sorted(merged)]
 
 
 class YahooClient:
@@ -192,13 +218,15 @@ class YahooClient:
                     found[symbol] = normalize_quote(item)
         return found
 
-    def chart(self, symbol: str) -> list[dict] | None:
+    def chart(self, symbol: str, interval: str = "1d") -> list[dict] | None:
+        interval = normalize_interval(interval)
+        spec = CHART_INTERVALS[interval]
         response = self._get(
             self._chart_client(),
             f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(symbol, safe='-')}",
             params={
-                "interval": "1d",
-                "range": "2y",
+                "interval": spec["interval"],
+                "range": spec["range"],
                 "includeAdjustedClose": "true",
                 "events": "div,splits",
             },
@@ -206,7 +234,7 @@ class YahooClient:
         if response is None:
             return None
         try:
-            return parse_chart(response.json())
+            return parse_chart(response.json(), intraday=bool(spec["intraday"]))
         except ValueError:
             return None
 

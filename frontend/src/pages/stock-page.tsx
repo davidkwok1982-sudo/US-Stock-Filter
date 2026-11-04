@@ -18,15 +18,32 @@ import {
   toneClass,
 } from "@/lib/format.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
-import type { StockDetail } from "@/lib/types.ts"
+import type { ChartInterval, StockDetail } from "@/lib/types.ts"
 
-type RangeKey = "6m" | "1y" | "2y"
+type RangeKey = "6m" | "1y" | "2y" | "5d" | "10d" | "60d"
+
+const INTERVALS: { key: ChartInterval; label: string }[] = [
+  { key: "1d", label: "日線" },
+  { key: "1wk", label: "週線" },
+  { key: "1h", label: "小時" },
+]
+
+function defaultRange(interval: ChartInterval): RangeKey {
+  return interval === "1h" ? "60d" : "1y"
+}
+
+function smaHint(interval: ChartInterval): string {
+  if (interval === "1wk") return "金線 50週 · 藍線 200週"
+  if (interval === "1h") return "金線 50小時 · 藍線 200小時"
+  return "金線 50天 · 藍線 200天"
+}
 
 export function StockPage() {
   const { symbol = "" } = useParams()
   const [detail, setDetail] = useState<StockDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [chartInterval, setChartInterval] = useState<ChartInterval>("1d")
   const [range, setRange] = useState<RangeKey>("1y")
 
   useEffect(() => {
@@ -36,7 +53,7 @@ export function StockPage() {
     setLoading(true)
     setError(null)
     setDetail(null)
-    fetchStock(cleaned)
+    fetchStock(cleaned, chartInterval)
       .then((next) => {
         if (stop) return
         setDetail(next)
@@ -52,7 +69,12 @@ export function StockPage() {
     return () => {
       stop = true
     }
-  }, [symbol])
+  }, [symbol, chartInterval])
+
+  function selectInterval(next: ChartInterval) {
+    setChartInterval(next)
+    setRange(defaultRange(next))
+  }
 
   if (!symbol) return <StockPicker />
 
@@ -123,42 +145,77 @@ export function StockPage() {
 
           <section className="overflow-hidden rounded-xl bg-chart text-white">
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-[#d9d2c5]">
-              <p>上方指數（SPY）陰陽燭 · 升紅跌綠 · 金線 50天 · 藍線 200天 · 下方成交量 · 虛線為支持／阻力</p>
-              <div className="flex gap-1">
-                {(
-                  [
-                    ["6m", "半年"],
-                    ["1y", "一年"],
-                    ["2y", "兩年"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setRange(key)}
-                    className={`rounded px-2 py-1 ${range === key ? "bg-white/15 text-white" : "text-white/70"}`}
-                    aria-pressed={range === key}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <p>
+                上方指數（SPY）陰陽燭 · 升紅跌綠 · {smaHint(chartInterval)} · 下方成交量
+                {chartInterval === "1d" ? " · 虛線為支持／阻力" : ""}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex gap-1" role="group" aria-label="圖表週期">
+                  {INTERVALS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => selectInterval(key)}
+                      className={`rounded px-2.5 py-1 font-medium ${chartInterval === key ? "bg-white/20 text-white" : "text-white/70 hover:text-white"}`}
+                      aria-pressed={chartInterval === key}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-1" role="group" aria-label="顯示範圍">
+                  {(chartInterval === "1h"
+                    ? ([
+                        ["5d", "5天"],
+                        ["10d", "10天"],
+                        ["60d", "約兩月"],
+                      ] as const)
+                    : ([
+                        ["6m", "半年"],
+                        ["1y", "一年"],
+                        ["2y", "兩年"],
+                      ] as const)
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setRange(key)}
+                      className={`rounded px-2 py-1 ${range === key ? "bg-white/15 text-white" : "text-white/70"}`}
+                      aria-pressed={range === key}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-            <StockChart bars={detail.bars} sma50={detail.sma50} sma200={detail.sma200} index={detail.index ?? null} levels={detail.levels} range={range} />
+            <StockChart
+              bars={detail.bars}
+              sma50={detail.sma50}
+              sma200={detail.sma200}
+              index={detail.index ?? null}
+              levels={detail.levels}
+              range={range}
+              interval={chartInterval}
+            />
           </section>
 
-          {detail.levels.length > 0 ? (
-            <ul className="flex flex-wrap gap-2 text-sm">
-              {detail.levels.map((level) => (
-                <li key={`${level.kind}-${level.price}`} className="rounded-md border border-border px-2 py-1">
-                  <span className="text-muted-foreground">{level.label}</span>
-                  <span className="num ml-2">{formatPrice(level.price)}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">{level.touches} 次</span>
-                </li>
-              ))}
-            </ul>
+          {chartInterval === "1d" ? (
+            detail.levels.length > 0 ? (
+              <ul className="flex flex-wrap gap-2 text-sm">
+                {detail.levels.map((level) => (
+                  <li key={`${level.kind}-${level.price}`} className="rounded-md border border-border px-2 py-1">
+                    <span className="text-muted-foreground">{level.label}</span>
+                    <span className="num ml-2">{formatPrice(level.price)}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{level.touches} 次</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">近期擺動未夠密，未能標出可靠的支持或阻力。</p>
+            )
           ) : (
-            <p className="text-sm text-muted-foreground">近期擺動未夠密，未能標出可靠的支持或阻力。</p>
+            <p className="text-sm text-muted-foreground">支持／阻力僅在日線顯示；週線與小時圖只顯示陰陽燭、均線與成交量。</p>
           )}
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">

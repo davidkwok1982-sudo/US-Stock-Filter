@@ -117,8 +117,11 @@ export type ScreenResponse = {
   refresh: RefreshState
 }
 
+/** YYYY-MM-DD for daily/weekly; unix seconds for hourly (lightweight-charts). */
+export type ChartTime = string | number
+
 export type Bar = {
-  time: string
+  time: ChartTime
   open: number
   high: number
   low: number
@@ -126,7 +129,9 @@ export type Bar = {
   volume: number
 }
 
-export type LinePoint = { time: string; value: number }
+export type LinePoint = { time: ChartTime; value: number }
+
+export type ChartInterval = "1d" | "1wk" | "1h"
 
 export type PriceLevel = {
   price: number
@@ -145,6 +150,8 @@ export type IndexSeries = {
 
 export type StockDetail = {
   row: ScreenRow
+  /** Selected chart timeframe; defaults to 1d when older API omits it. */
+  interval?: ChartInterval
   bars: Bar[]
   sma50: LinePoint[]
   sma200: LinePoint[]
