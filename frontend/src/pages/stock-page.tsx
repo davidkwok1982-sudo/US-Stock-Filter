@@ -27,7 +27,11 @@ const INTERVALS: { key: ChartInterval; label: string }[] = [
 ]
 
 function defaultRange(interval: ChartInterval): RangeKey {
-  return interval === "1h" ? "60d" : "1y"
+  // Visible window on load / timeframe switch (chart filters + fitContent).
+  // Data fetch already covers these: 1d→2y, 1wk→5y, 1h→60d (yahoo CHART_INTERVALS).
+  if (interval === "1h") return "60d"
+  if (interval === "1wk") return "2y"
+  return "6m"
 }
 
 function smaHint(interval: ChartInterval): string {
@@ -44,7 +48,7 @@ export function StockPage() {
   const [chartLoading, setChartLoading] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1d")
-  const [range, setRange] = useState<RangeKey>("1y")
+  const [range, setRange] = useState<RangeKey>(defaultRange("1d"))
   const [summaryOpen, setSummaryOpen] = useState(false)
 
   const loadedSymbolRef = useRef<string>("")
