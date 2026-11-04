@@ -51,7 +51,7 @@ export function Layout() {
       </header>
 
       <div className="mx-auto flex max-w-6xl flex-wrap items-baseline justify-between gap-2 px-4 py-2 text-xs text-muted-foreground">
-        <p>教育近似 · 非投資建議 · 升紅跌綠</p>
+        <p>升紅跌綠</p>
         <p>
           {marketDate ? `美東交易日 ${formatMarketDate(marketDate)}` : "等待行情"}
           {refreshed ? ` · 香港時間 ${formatHongKongTime(refreshed)} 更新` : ""}
@@ -63,7 +63,7 @@ export function Layout() {
       </main>
 
       <footer className="mx-auto hidden max-w-6xl px-4 pb-10 text-xs leading-relaxed text-muted-foreground md:block">
-        篩選只按公開描述的第二階段條件作教育近似，短線觀察，非投資建議。
+        資料來源：Nasdaq Trader 符號目錄 · Yahoo Finance 公開行情。
       </footer>
 
       <nav

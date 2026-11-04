@@ -15,7 +15,7 @@ const TOGGLES: { key: keyof Filters; label: string; hint: string }[] = [
   { key: "above50", label: "高於50天線", hint: "現價高於50天線" },
   { key: "slope", label: "均線向上", hint: "50／150／200天線過去約一個月都向上（硬性條件已要求；此鈕可再強調）" },
   { key: "rs", label: "跑贏 SPY", hint: "近一星期回報高於 SPY（約5個交易日）" },
-  { key: "support", label: "收市近支持", hint: "最新收市價剛好落在近期擺動支持位附近（約 ±1%），允許輕微刺穿但未明顯跌破（教育約數）" },
+  { key: "support", label: "收市近支持", hint: "最新收市價剛好落在近期擺動支持位附近（約 ±1%），允許輕微刺穿但未明顯跌破" },
   { key: "excludeMicro", label: "排除場外及微盤", hint: "剔除股價低於 5 美元、市值少於 3 億或場外代號" },
 ]
 
@@ -81,15 +81,17 @@ export function ScreenPage() {
             </div>
             <BreadthMeter count={passCount} />
             <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              家數只計本宇宙（標普500 {data.meta.universe.sp500}、標普中型400 {data.meta.universe.sp400}、納指100 {data.meta.universe.ndx}，合併 {data.meta.universe.unique} 隻），不是全市場。200／100 沿用公開文章的經驗數字，只作觀察。
+              宇宙為全美上市普通股（已剔除 ADR 與 ETF），目前 {data.meta.universe.unique} 隻
+              {data.meta.universe.evaluated != null && data.meta.universe.evaluated !== data.meta.universe.unique
+                ? `（已評估 ${data.meta.universe.evaluated}）`
+                : ""}
+              。200／100 沿用公開文章的經驗數字，只作觀察。
               SPY 近一星期 {formatPct(data.meta.spy.ret1w ?? data.meta.spy.ret6m)}。
             </p>
-            <dl className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-5">
+            <dl className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
               <Stat label="未呈價＞50＞150＞200" value={data.meta.summary.failMaStack ?? data.meta.summary.failSma200} />
               <Stat label="均線未全部向上" value={data.meta.summary.failMaSlope ?? 0} />
               <Stat label="市值不足或未明" value={data.meta.summary.failCap} />
-              <Stat label="成交額不足" value={data.meta.summary.failLiquidity} />
-              <Stat label="貝他不足或未明" value={data.meta.summary.failBeta} />
             </dl>
             <p className="mt-2 text-[11px] text-muted-foreground">同一股份可計入多於一項。硬性條件通過與否，不受下面的可選收緊影響。</p>
           </section>
@@ -140,7 +142,7 @@ export function ScreenPage() {
             <details className="text-sm text-muted-foreground">
               <summary className="cursor-pointer text-foreground">怎樣讀這張表</summary>
               <p className="mt-2 max-w-3xl leading-relaxed">
-                預設只列出通過硬性條件的股份：現價＞50天線＞150天線＞200天線、三條均線過去約一個月都向上、市值逾20億美元、日均成交額約3,000萬美元、貝他不低於1。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序，不是買賣訊號。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「收市近支持」以日線擺動低點估計支持；最新收市落在該位約 ±1% 內（可輕微刺穿、明顯跌破則否），屬教育約數。
+                預設只列出通過篩選的股份：現價＞50天線＞150天線＞200天線、三條均線過去約一個月都向上、市值逾20億美元。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「收市近支持」以日線擺動低點估計支持；最新收市落在該位約 ±1% 內（可輕微刺穿、明顯跌破則否）。
                 <Link to="/strategy" className="ml-2 text-foreground underline underline-offset-4">
                   策略說明
                 </Link>
@@ -236,7 +238,7 @@ function LoadingState({ message, progress }: { message: string; progress: number
         <Skeleton className="h-8 w-4/5" />
       </div>
       <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
-        首次會向 Yahoo Finance 下載標普500、標普中型400及納指100的日線，大約需要半分鐘，並寫入本機快取。
+        首次會按批次向 Yahoo Finance 下載全美普通股日線（已剔除 ADR／ETF），需時較長，並寫入本機快取；更新中可先看已完成部分。
       </p>
     </div>
   )

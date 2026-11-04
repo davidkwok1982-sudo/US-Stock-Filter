@@ -5,11 +5,8 @@ from __future__ import annotations
 from app.close_at_support import detect_close_at_support
 from app.labels import group_labels, industry_zh, sector_zh
 from app.metrics import (
-    BETA_MIN_OBS,
     HIGH_DAYS,
     MICRO_CAP,
-    MIN_BETA,
-    MIN_DOLLAR_VOLUME,
     MIN_MARKET_CAP,
     NEAR_HIGH_WITHIN,
     PENNY_PRICE,
@@ -20,7 +17,6 @@ from app.metrics import (
     SMA_MID,
     SMA_SLOW,
     average_dollar,
-    beta_vs,
     build_score,
     is_otc,
     rolling_sma,
@@ -32,9 +28,6 @@ FAILS = {
     "ma_stack": "未呈價＞50＞150＞200",
     "ma_slope": "均線未全部向上",
     "cap": "市值不足20億美元或未明",
-    "liquidity": "日均成交額低於3,000萬美元",
-    "beta": "貝他低於1",
-    "beta_missing": "貝他未明",
     "otc": "場外交易",
     "type": "非普通股",
 }
@@ -49,7 +42,6 @@ def evaluate(
     bars: list[dict] | None,
     quote: dict | None,
     spy_bars: list[dict],
-    vendor_beta: float | None = None,
 ) -> dict:
     quote = quote or {}
     bars = bars or []
@@ -83,16 +75,6 @@ def evaluate(
     spy_closes = _closes(spy_bars)
     spy_dates = [bar["time"] for bar in spy_bars]
     stock_closes = _closes(bars)
-    beta = None
-    beta_basis = None
-    if vendor_beta is not None and abs(vendor_beta) <= 8:
-        beta = round(float(vendor_beta), 2)
-        beta_basis = "yahoo"
-    elif stock_closes and spy_closes:
-        estimated = beta_vs(stock_closes, spy_closes)
-        if estimated is not None:
-            beta = round(estimated, 2)
-            beta_basis = "90d-spy"
     ret1w = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_1W) if stock_closes else None
     ret3 = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_3M) if stock_closes else None
     ret6 = window_return(stock_closes, spy_dates or list(stock_closes), RS_DAYS_6M) if stock_closes else None
@@ -143,12 +125,6 @@ def evaluate(
     market_cap = quote.get("marketCap")
     if market_cap is None or market_cap < MIN_MARKET_CAP:
         fail_codes.append("cap")
-    if dollar is None or dollar < MIN_DOLLAR_VOLUME:
-        fail_codes.append("liquidity")
-    if beta is None:
-        fail_codes.append("beta_missing")
-    elif beta < MIN_BETA:
-        fail_codes.append("beta")
     if otc:
         fail_codes.append("otc")
     if quote_type and quote_type != "EQUITY":
@@ -175,7 +151,7 @@ def evaluate(
     )
     groups = list(base.get("groups") or [])
     name = quote.get("name") or base.get("name") or base.get("symbol")
-    incomplete = len(bars) < SMA_SLOW or sma200 is None or beta is None and len(spy_bars) < BETA_MIN_OBS
+    incomplete = len(bars) < SMA_SLOW or sma200 is None
 
     return {
         "symbol": base["symbol"],
@@ -210,8 +186,6 @@ def evaluate(
         "nearHigh": near_high,
         "closeAtSupport": close_at_support,
         "closeAtSupportNote": close_at_support_note,
-        "beta": beta,
-        "betaBasis": beta_basis,
         "ret1w": ret1w,
         "ret3m": ret3,
         "ret6m": ret6,
@@ -263,12 +237,10 @@ def summarize(rows: list[dict]) -> dict:
         "incomplete": sum(1 for row in rows if row["incomplete"]),
         "failMaStack": has("ma_stack"),
         "failMaSlope": has("ma_slope"),
-        "failSma200": has("ma_stack"),  # legacy alias for older UI copies
+        "failSma200": has("ma_stack"),
         "failCap": has("cap"),
-        "failLiquidity": has("liquidity"),
-        "failBeta": has("beta") + has("beta_missing"),
-        "failBetaLow": has("beta"),
-        "failBetaMissing": has("beta_missing"),
+        "failLiquidity": 0,
+        "failBeta": 0,
         "failOtc": has("otc"),
         "failType": has("type"),
         "microOrOtc": sum(1 for row in rows if row["microOrOtc"]),

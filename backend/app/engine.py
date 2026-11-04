@@ -7,7 +7,7 @@ import re
 import threading
 from datetime import datetime, timedelta, timezone
 
-from app.config import COOLDOWN_SECONDS, LIMIT, TTL_HOURS, WORKERS
+from app.config import CHUNK_SIZE, COOLDOWN_SECONDS, LIMIT, TTL_HOURS, WORKERS
 from app.close_at_support import RULE_VERSION, detect_close_at_support
 from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
@@ -67,80 +67,143 @@ class Engine:
             self._set(running=False, message="更新失敗", error="更新時發生問題，請稍後再試")
 
     def _refresh(self) -> None:
-        self._set(progress=3, message="正在讀取指數成份")
+        self._set(progress=3, message="正在讀取美股符號目錄")
         constituents, source = load_universe()
         if LIMIT:
             constituents = constituents[:LIMIT]
         symbols = [item["symbol"] for item in constituents]
-        self._set(progress=8, message=f"成份 {len(symbols)} 隻，正在下載日線")
+        total = len(symbols)
+        self._set(progress=6, message=f"宇宙 {total} 隻，正在下載 SPY")
 
         client = get_client()
-        targets = symbols + ["SPY"]
-        counter = {"n": 0}
-        counter_lock = threading.Lock()
-        total = len(targets)
+        spy_bars = client.chart("SPY")
+        if not spy_bars:
+            raise RuntimeError("未能下載 SPY，相對強度無法計算，未覆寫快取")
+        store.save_chart("SPY", spy_bars)
 
-        def on_each(_symbol: str, _ok: bool) -> None:
-            with counter_lock:
-                counter["n"] += 1
-                done = counter["n"]
-            if done == total or done % 20 == 0:
-                progress = 8 + int(70 * done / total)
-                self._set(progress=progress, message=f"正在下載日線 {done}/{total}")
+        rows: list[dict] = []
+        chart_ok = 0
+        quote_ok = 0
+        chunk = max(50, CHUNK_SIZE)
+        batches = (total + chunk - 1) // chunk if total else 1
 
-        charts = client.charts(targets, workers=WORKERS, on_each=on_each)
-        if "SPY" not in charts:
-            raise RuntimeError("未能下載 SPY，貝他無法計算，未覆寫快取")
-        ok = sum(1 for symbol in symbols if symbol in charts)
-        if ok < 0.7 * len(symbols):
-            raise RuntimeError(f"日線下載不完整（{ok}/{len(symbols)}），未覆寫快取")
-
-        self._set(progress=80, message="正在讀取市值與報價")
-        quotes = client.quotes(symbols)
-        if len(quotes) < 0.6 * len(symbols):
-            raise RuntimeError(f"報價下載不足（{len(quotes)}/{len(symbols)}），未覆寫快取")
-
-        self._set(progress=86, message="正在讀取貝他")
-        vendor_betas = client.betas(symbols, workers=min(8, WORKERS))
-
-        self._set(progress=92, message="正在計算均線、貝他與評分")
-        spy_bars = charts["SPY"]
-        rows = [
-            evaluate(
-                item,
-                charts.get(item["symbol"]),
-                quotes.get(item["symbol"]),
-                spy_bars,
-                vendor_beta=vendor_betas.get(item["symbol"]),
+        for batch_index in range(0, total, chunk):
+            batch = constituents[batch_index : batch_index + chunk]
+            batch_symbols = [item["symbol"] for item in batch]
+            done_before = batch_index
+            batch_no = batch_index // chunk + 1
+            self._set(
+                progress=min(88, 8 + int(80 * done_before / max(total, 1))),
+                message=f"分批下載日線 {done_before}/{total}（第 {batch_no}/{batches} 批）",
             )
-            for item in constituents
-        ]
+
+            counter = {"n": 0}
+            counter_lock = threading.Lock()
+
+            def on_each(_symbol: str, _ok: bool) -> None:
+                with counter_lock:
+                    counter["n"] += 1
+                    local_done = counter["n"]
+                absolute = done_before + local_done
+                if local_done == len(batch_symbols) or local_done % 25 == 0:
+                    progress = 8 + int(80 * absolute / max(total, 1))
+                    self._set(
+                        progress=min(88, progress),
+                        message=f"正在下載日線 {absolute}/{total}",
+                    )
+
+            charts = client.charts(batch_symbols, workers=WORKERS, on_each=on_each)
+            chart_ok += sum(1 for symbol in batch_symbols if symbol in charts)
+            store.upsert_charts(charts)
+
+            self._set(
+                progress=min(90, 8 + int(80 * (done_before + len(batch_symbols)) / max(total, 1))),
+                message=f"正在讀取報價 {done_before + len(batch_symbols)}/{total}",
+            )
+            quotes = client.quotes(batch_symbols)
+            quote_ok += len(quotes)
+
+            for item in batch:
+                rows.append(
+                    evaluate(
+                        item,
+                        charts.get(item["symbol"]),
+                        quotes.get(item["symbol"]),
+                        spy_bars,
+                    )
+                )
+
+            # Persist progressive snapshot so the UI can show a growing screen.
+            rows.sort(key=lambda row: (-row["score"], row["symbol"]))
+            snapshot = self._build_snapshot(
+                rows=rows,
+                spy_bars=spy_bars,
+                source=source,
+                universe_size=total,
+                chart_failures=len(symbols) - chart_ok,
+                partial=batch_index + len(batch) < total,
+            )
+            store.save_snapshot(snapshot)
+            # Free batch charts from memory.
+            del charts
+
+        if chart_ok < 0.4 * total:
+            raise RuntimeError(f"日線下載不完整（{chart_ok}/{total}），未覆寫快取")
+        if quote_ok < 0.3 * total:
+            raise RuntimeError(f"報價下載不足（{quote_ok}/{total}），未覆寫快取")
+
+        self._set(progress=94, message="正在整理結果")
         rows.sort(key=lambda row: (-row["score"], row["symbol"]))
+        snapshot = self._build_snapshot(
+            rows=rows,
+            spy_bars=spy_bars,
+            source=source,
+            universe_size=total,
+            chart_failures=len(symbols) - chart_ok,
+            partial=False,
+        )
+        store.save_snapshot(snapshot)
+        store.prune_charts(set(symbols) | {"SPY"})
+        summary = snapshot["meta"]["summary"]
+        log.info(
+            "refresh done universe=%s pass=%s failures=%s",
+            len(rows),
+            summary["pass"],
+            len(symbols) - chart_ok,
+        )
+
+    def _build_snapshot(
+        self,
+        *,
+        rows: list[dict],
+        spy_bars: list[dict],
+        source: str,
+        universe_size: int,
+        chart_failures: int,
+        partial: bool,
+    ) -> dict:
         summary = summarize(rows)
-        counts = {"sp500": 0, "ndx": 0, "sp400": 0, "unique": len(constituents)}
-        for item in constituents:
-            for group in item["groups"]:
-                counts[group] = counts.get(group, 0) + 1
         now = datetime.now(timezone.utc).isoformat()
-        snapshot = {
+        return {
             "meta": {
                 "refreshedAt": now,
                 "marketDate": spy_bars[-1]["time"],
                 "universeSource": source,
-                "universe": counts,
+                "universe": {
+                    "unique": universe_size,
+                    "evaluated": len(rows),
+                    "partial": partial,
+                },
                 "summary": summary,
                 "breadth": breadth(summary["pass"]),
                 "spy": spy_snapshot(spy_bars),
                 "source": "Yahoo Finance 圖表與報價（免費公開接口，無需 API 金鑰）",
-                "betaMethod": "優先用 Yahoo Finance 公布的貝他。若該欄為空，改以過去約90個重疊交易日的日回報對 SPY 估算，並在表內標明。少於60個觀測則列為未明。",
-                "dollarVolumeMethod": "優先取過去63個交易日的未還原收市價乘成交量之平均；不足則用三個月平均成交量乘現價。門檻為3,000萬美元。",
+                "dollarVolumeMethod": "優先取過去63個交易日的未還原收市價乘成交量之平均；不足則用三個月平均成交量乘現價。流動性只作評分，不作硬性門檻。",
                 "adjustment": "K線及均線使用拆股還原價；成交額用未還原收市價乘成交量。",
                 "ttlHours": TTL_HOURS,
-                "chartFailures": len(symbols) - ok,
+                "chartFailures": chart_failures,
                 "criteria": {
                     "minMarketCap": 2_000_000_000,
-                    "minDollarVolume": 30_000_000,
-                    "minBeta": 1,
                     "nearHighWithin": 0.25,
                     "closeAtSupportRuleVersion": RULE_VERSION,
                     "scoreRuleVersion": SCORE_RULE_VERSION,
@@ -150,14 +213,6 @@ class Engine:
             },
             "rows": rows,
         }
-        self._set(progress=96, message="正在寫入本機快取")
-        store.save_refresh(snapshot, charts)
-        log.info(
-            "refresh done universe=%s pass=%s failures=%s",
-            len(rows),
-            summary["pass"],
-            len(symbols) - ok,
-        )
 
     def screen(self) -> dict:
         snapshot = store.load_snapshot()
@@ -174,6 +229,7 @@ class Engine:
         criteria = (snapshot.get("meta") or {}).get("criteria") or {}
         if (
             any("rs1w" not in row for row in snapshot["rows"])
+            or any("beta" in row.get("failCodes", []) or "beta_missing" in row.get("failCodes", []) or "liquidity" in row.get("failCodes", []) for row in snapshot["rows"])
             or criteria.get("scoreRuleVersion") != SCORE_RULE_VERSION
         ):
             self._backfill_score_rules(snapshot)
@@ -181,6 +237,8 @@ class Engine:
         for row in snapshot["rows"]:
             item = dict(row)
             item.pop("scoreParts", None)
+            item.pop("beta", None)
+            item.pop("betaBasis", None)
             slim.append(item)
         return {
             "ready": True,
@@ -223,7 +281,6 @@ class Engine:
                 "quoteType": "EQUITY",
                 "avgVolume3m": None,
             }
-            vendor_beta = row.get("beta") if row.get("betaBasis") == "yahoo" else None
             base = {
                 "symbol": row["symbol"],
                 "name": row.get("name") or row["symbol"],
@@ -231,8 +288,7 @@ class Engine:
                 "sector": row.get("sectorEn") or row.get("sector"),
                 "industry": row.get("industryEn") or row.get("industry"),
             }
-            fresh = evaluate(base, bars, quote, spy_bars, vendor_beta=vendor_beta)
-            # Preserve fields that evaluate does not re-derive from quotes alone.
+            fresh = evaluate(base, bars, quote, spy_bars)
             for key in ("closeAtSupport", "closeAtSupportNote", "revenueGrowth", "earningsGrowth", "profitMargin"):
                 if key in row:
                     fresh[key] = row[key]
@@ -246,6 +302,13 @@ class Engine:
             meta["breadth"] = breadth(meta["summary"]["pass"])
         criteria = meta.setdefault("criteria", {})
         criteria["scoreRuleVersion"] = SCORE_RULE_VERSION
+        criteria.pop("minBeta", None)
+        criteria.pop("minDollarVolume", None)
+        # Normalize universe meta shape for older snapshots.
+        universe = meta.get("universe")
+        if isinstance(universe, dict) and "unique" in universe and "evaluated" not in universe:
+            universe["evaluated"] = len(updated)
+            universe.setdefault("partial", False)
         store.save_snapshot(snapshot)
         log.info("backfilled score rules v%s on %s cached rows", SCORE_RULE_VERSION, len(updated))
 
@@ -258,8 +321,6 @@ class Engine:
             row = next((item for item in snapshot["rows"] if item["symbol"] == symbol), None)
         client = get_client()
         quote = None
-        # Daily bars stay on the refresh SQLite cache; weekly/hourly are fetched live so
-        # the screen cache is not mixed with other granularities.
         if interval == "1d":
             bars = store.load_chart(symbol)
             if bars is None or row is None:
@@ -294,7 +355,6 @@ class Engine:
                 spy = []
         if not bars:
             raise LookupError("找不到這隻股份的圖表資料")
-        # Evaluate / score always use daily bars when available so Stage 2 maths stay consistent.
         eval_bars = bars
         eval_spy = spy
         if interval != "1d":
@@ -314,15 +374,11 @@ class Engine:
                 "sector": None,
                 "industry": None,
             }
-            row = evaluate(
-                base,
-                eval_bars,
-                quote or {},
-                eval_spy,
-                vendor_beta=client.vendor_beta(symbol),
-            )
+            row = evaluate(base, eval_bars, quote or {}, eval_spy)
         fundamentals = self._fundamentals(symbol)
         detail_row = dict(row)
+        detail_row.pop("beta", None)
+        detail_row.pop("betaBasis", None)
         profile = None
         if fundamentals:
             if fundamentals.get("sector"):
@@ -357,8 +413,6 @@ class Engine:
                 "phone": fundamentals.get("phone"),
                 "source": "Yahoo Finance public quoteSummary (assetProfile)",
             }
-        # Support/resistance from the displayed series; SMA50/150/200 are bar windows on that series
-        # (days / weeks / hours), matching the current daily behaviour.
         levels = find_levels(bars) if interval == "1d" else []
         notes = build_notes(detail_row, levels)
         return {
@@ -377,7 +431,6 @@ class Engine:
 
     def _fundamentals(self, symbol: str) -> dict | None:
         cached = store.load_fundamentals(symbol)
-        # Older cache rows lack company-profile keys; refetch once so detail can show summary.
         cache_has_profile = bool(cached) and "summary" in cached
         if cached and cache_has_profile and cached.get("updatedAt"):
             stamp = datetime.fromisoformat(cached["updatedAt"])
@@ -403,9 +456,7 @@ def normalize_symbol(symbol: str) -> str:
     return cleaned
 
 
-
 def _index_series(bars: list[dict], *, symbol: str, label: str) -> dict:
-    """Benchmark OHLC + closes for the stock chart index pane; empty when missing."""
     closes = []
     public = []
     for bar in bars:

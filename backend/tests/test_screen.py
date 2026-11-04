@@ -1,4 +1,4 @@
-"""Unit tests for Stage 2 maths, levels, notes, and the constituent parser."""
+"""Unit tests for Stage 2 maths, levels, notes, and the symbol-directory parser."""
 
 from __future__ import annotations
 
@@ -9,17 +9,15 @@ from app.evaluate import evaluate
 from app.levels import find_levels
 from app.metrics import (
     SCORE_MAX,
-    beta_vs,
     breadth,
-    points_beta,
     points_distance,
     points_liquidity,
     points_near_high,
     points_rs,
 )
-from app.notes import DISCLAIMER, build_notes
+from app.notes import build_notes
 from app import store
-from app.universe import parse_constituents, to_yahoo
+from app.universe import parse_nasdaq_listed, parse_other_listed, to_yahoo, _merge
 
 
 def _bars(start: date, closes: list[float], volume: float = 2_000_000) -> list[dict]:
@@ -75,6 +73,7 @@ def _paired(n: int = 280):
         day += timedelta(days=1)
     return stock_bars, spy_bars
 
+
 def _uptrend_pair(n: int = 280):
     """Steady climb so price > SMA50 > SMA150 > SMA200 and all slopes > 0."""
     day = date(2024, 1, 2)
@@ -85,7 +84,6 @@ def _uptrend_pair(n: int = 280):
     for index in range(n):
         while day.weekday() >= 5:
             day += timedelta(days=1)
-        # Mild market drift + stronger stock climb keeps beta-like co-movement positive.
         spy *= 1.0012
         stock *= 1.0035 + (0.0004 if index % 7 == 0 else 0.0)
         stamp = day.isoformat()
@@ -112,7 +110,6 @@ def test_score_weights_sum_to_100():
 
 
 def test_score_edges():
-    # 1-week RS scale: -5pp→0, flat→~10, +8pp→25
     assert points_rs(-0.05) == 0
     assert points_rs(0) == 10
     assert points_rs(0.08) == 25
@@ -125,24 +122,12 @@ def test_score_edges():
     assert points_near_high(-0.5) == 0
     assert points_liquidity(30_000_000) == 4
     assert points_liquidity(240_000_000) == 10
-    assert points_beta(0.9) == 0
-    assert points_beta(1.2) == 5
-    assert points_beta(2.5) == 2
 
 
 def test_breadth_bands():
     assert breadth(200)["tone"] == "bullish"
     assert breadth(100)["tone"] == "neutral"
     assert breadth(99)["tone"] == "cautious"
-
-
-def test_beta_recovers_planted_relationship():
-    stock_bars, spy_bars = _paired()
-    stock = {bar["time"]: bar["close"] for bar in stock_bars}
-    spy = {bar["time"]: bar["close"] for bar in spy_bars}
-    beta = beta_vs(stock, spy)
-    assert beta is not None
-    assert 1.05 < beta < 1.9
 
 
 def test_uptrend_passes_stage_two():
@@ -159,11 +144,10 @@ def test_uptrend_passes_stage_two():
         "quoteType": "EQUITY",
     }
     row = evaluate(
-        {"symbol": "EXM", "name": "Example", "groups": ["sp500"], "sector": "Information Technology", "industry": "Semiconductors"},
+        {"symbol": "EXM", "name": "Example", "groups": ["us"], "sector": "Information Technology", "industry": "Semiconductors"},
         stock_bars,
         quote,
         spy_bars,
-        vendor_beta=1.3,
     )
     assert row["passHard"] is True
     assert row["aboveSma200"] is True
@@ -171,8 +155,8 @@ def test_uptrend_passes_stage_two():
     assert row["slopeUp"] is True
     assert row["sma150"] is not None
     assert row["price"] > row["sma50"] > row["sma150"] > row["sma200"]
-    assert row["beta"] is not None and row["beta"] >= 1
-    assert row["dollarVolume"] >= 30_000_000
+    assert "beta" not in row
+    assert "liquidity" not in row["failCodes"]
     assert row["sector"] == "資訊科技"
     assert row["industry"] == "半導體"
     assert row["score"] > 40
@@ -183,23 +167,29 @@ def test_uptrend_passes_stage_two():
     assert row["failReasons"] == []
 
 
-def test_vendor_beta_is_preferred_over_the_90_day_estimate():
+def test_low_liquidity_still_passes_hard_when_ma_and_cap_ok():
     stock_bars, spy_bars = _uptrend_pair()
+    # Tiny dollar volume — previously a hard fail; now soft (score only).
+    for bar in stock_bars:
+        bar["volume"] = 100
+        bar["dollar"] = bar["close"] * 100
     quote = {
         "price": stock_bars[-1]["close"],
         "marketCap": 80_000_000_000,
         "quoteType": "EQUITY",
         "exchangeName": "NasdaqGS",
+        "avgVolume3m": 100,
     }
-    base = {"symbol": "EXM", "name": "Example", "groups": ["sp500"], "sector": None, "industry": None}
-    low = evaluate(base, stock_bars, quote, spy_bars, vendor_beta=0.4)
-    assert low["beta"] == 0.4
-    assert low["betaBasis"] == "yahoo"
-    assert "beta" in low["failCodes"]
-    high = evaluate(base, stock_bars, quote, spy_bars, vendor_beta=1.2)
-    assert high["betaBasis"] == "yahoo"
-    assert "beta" not in high["failCodes"]
-    assert "beta_missing" not in high["failCodes"]
+    row = evaluate(
+        {"symbol": "EXM", "name": "Example", "groups": ["us"], "sector": None, "industry": None},
+        stock_bars,
+        quote,
+        spy_bars,
+    )
+    assert row["passHard"] is True
+    assert "liquidity" not in row["failCodes"]
+    assert "beta" not in row["failCodes"]
+    assert "beta_missing" not in row["failCodes"]
 
 
 def test_downtrend_fails_ma_stack():
@@ -213,7 +203,7 @@ def test_downtrend_fails_ma_stack():
         "exchangeName": "NYSE",
     }
     row = evaluate(
-        {"symbol": "DOWN", "name": "Down Co", "groups": ["sp400"], "sector": None, "industry": None},
+        {"symbol": "DOWN", "name": "Down Co", "groups": ["us"], "sector": None, "industry": None},
         bars,
         quote,
         spy_bars,
@@ -224,8 +214,6 @@ def test_downtrend_fails_ma_stack():
 
 
 def test_price_above_200_but_not_stacked_fails():
-    """Price > SMA200 is no longer enough; need price > 50 > 150 > 200."""
-    # Climb, then mild pullback: last price still > SMA200 but below SMA50 (broken stack).
     closes = [80 + i * 0.3 for i in range(250)]
     peak = closes[-1]
     closes.extend([peak * (1 - 0.004 * i) for i in range(1, 21)])
@@ -238,11 +226,10 @@ def test_price_above_200_but_not_stacked_fails():
         "exchangeName": "NYSE",
     }
     row = evaluate(
-        {"symbol": "MIX", "name": "Mixed", "groups": ["sp500"], "sector": None, "industry": None},
+        {"symbol": "MIX", "name": "Mixed", "groups": ["us"], "sector": None, "industry": None},
         bars,
         quote,
         spy_bars,
-        vendor_beta=1.2,
     )
     assert row["sma50"] is not None and row["sma150"] is not None and row["sma200"] is not None
     assert row["price"] > row["sma200"]
@@ -251,25 +238,24 @@ def test_price_above_200_but_not_stacked_fails():
     assert "ma_stack" in row["failCodes"]
 
 
-def test_notes_include_disclaimer_and_bounds():
+def test_notes_omit_disclaimer_and_beta():
     stock_bars, spy_bars = _uptrend_pair()
     row = evaluate(
-        {"symbol": "EXM", "name": "Example", "groups": ["ndx"], "sector": "Technology", "industry": "Software"},
+        {"symbol": "EXM", "name": "Example", "groups": ["us"], "sector": "Technology", "industry": "Software"},
         stock_bars,
         {"price": stock_bars[-1]["close"], "marketCap": 50e9, "quoteType": "EQUITY", "exchangeName": "NasdaqGS", "pe": 22},
         spy_bars,
-        vendor_beta=1.2,
     )
     row["revenueGrowth"] = 0.12
     levels = find_levels(stock_bars)
     notes = build_notes(row, levels)
-    assert DISCLAIMER in notes["disclaimer"]
+    assert notes["disclaimer"] == ""
+    assert "非投資建議" not in notes["disclaimer"]
+    assert "貝他" not in " ".join(notes["technical"])
     assert 2 <= len(notes["technical"]) <= 4
     assert 1 <= len(notes["fundamental"]) <= 2
-    assert "非投資建議" in notes["disclaimer"]
     joined = " ".join(notes["technical"] + notes["fundamental"])
     assert "買入" not in joined
-    assert "建議" not in joined or "非投資建議" in notes["disclaimer"]
 
 
 def test_support_sits_below_and_resistance_above():
@@ -279,7 +265,6 @@ def test_support_sits_below_and_resistance_above():
         closes.append(100 + phase * 2 if phase <= 10 else 120 - (phase - 10) * 2)
     closes[-1] = 110
     bars = _bars(date(2024, 6, 3), closes, volume=1_000_000)
-    # Give the last bar a mid-range close without being a swing extreme.
     bars[-1]["close"] = 110
     bars[-1]["high"] = 112
     bars[-1]["low"] = 108
@@ -312,52 +297,39 @@ def test_store_roundtrip(tmp_path, monkeypatch):
     assert fund["sector"] == "Technology"
 
 
-def test_parse_wikipedia_styles_and_class_shares():
-    sp = """
-{| class="wikitable" id="constituents"
-|-
-! Symbol !! Security !! GICS Sector !! GICS Sub-Industry
-|-
-|| {{NyseSymbol|MMM}}
-|| [[3M]]
-|| Industrials
-|| Industrial Conglomerates
-|-
-|| {{NyseSymbol|BRK.B}}
-|| [[Berkshire Hathaway]]
-|| Financials
-|| Multi-Sector Holdings
-|}
+def test_parse_nasdaq_and_other_listed_filters_adr_etf():
+    nasdaq = """Symbol|Security Name|Market Category|Test Issue|Financial Status|Round Lot Size|ETF|NextShares
+AAPL|Apple Inc. - Common Stock|Q|N|N|100|N|N
+SPY|SPDR S&P 500 ETF Trust|G|N|N|100|Y|N
+AACG|ATA Creativity Global - American Depositary Shares|S|N|N|100|N|N
+ZZZT|NASDAQ TEST STOCK|G|Y|N|100|N|N
+File Creation Time: 1104202607:00|||||||
 """
-    ndx = """
-{| class="wikitable sortable" id="constituents"
-|-
-! Ticker !! Company !! ISIN !! ICB Industry !! ICB Subsector
-|-
-| AAPL || [[Apple Inc.]] || {{ISIN|sl=n|US0378331005}} || Technology || Computer Hardware
-|-
-| GOOG || [[Alphabet Inc.|Alphabet (Class C)]] || {{ISIN|sl=n|US02079K1079}} || Technology || Interactive Media & Services
-|}
+    other = """ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|Test Issue|NASDAQ Symbol
+BRK.B|Berkshire Hathaway Inc. Class B Common Stock|N|BRK.B|N|100|N|BRK-B
+QQQ|Invesco QQQ Trust, Series 1|P|QQQ|Y|100|N|QQQ
+BABA|Alibaba Group Holding Limited American Depositary Shares|N|BABA|N|100|N|BABA
+IBM|International Business Machines Corporation Common Stock|N|IBM|N|100|N|IBM
+File Creation Time: 1104202607:00|||||||
 """
-    sp_rows = parse_constituents(sp, "sp500")
-    ndx_rows = parse_constituents(ndx, "ndx")
-    assert [row["symbol"] for row in sp_rows] == ["MMM", "BRK.B"]
+    nasdaq_rows = parse_nasdaq_listed(nasdaq)
+    other_rows = parse_other_listed(other)
+    symbols = {row["symbol"] for row in _merge(nasdaq_rows + other_rows)}
+    assert "AAPL" in symbols
+    assert "IBM" in symbols
     assert to_yahoo("BRK.B") == "BRK-B"
-    assert sp_rows[0]["sector"] == "Industrials"
-    assert sp_rows[0]["name"] == "3M"
-    assert ndx_rows[0]["symbol"] == "AAPL"
-    assert ndx_rows[1]["name"] == "Alphabet (Class C)"
-    assert ndx_rows[1]["sector"] == "Technology"
-    assert ndx_rows[1]["industry"] == "Interactive Media & Services"
+    assert "BRK-B" in symbols
+    assert "SPY" not in symbols
+    assert "QQQ" not in symbols
+    assert "AACG" not in symbols
+    assert "BABA" not in symbols
+    assert "ZZZT" not in symbols
 
 
 def _close_at_support_bars() -> list[dict]:
-    """Synthetic: repeated swing lows near 100, latest close sits on that support."""
     closes: list[float] = []
-    # Several bounce cycles that bottom near 100.
     for _ in range(6):
         closes.extend([100.0, 101.5, 103.0, 105.0, 107.0, 105.5, 103.5, 102.0, 101.0, 100.2])
-    # Drift up then settle back onto support.
     closes.extend([102.0, 104.0, 106.0, 104.0, 102.0, 100.5])
 
     day = date(2025, 1, 2)
@@ -366,7 +338,6 @@ def _close_at_support_bars() -> list[dict]:
         while day.weekday() >= 5:
             day += timedelta(days=1)
         low = close - 0.4
-        # Emphasize trough bars as clear swing lows at 100.
         if abs(close - 100.0) < 0.05:
             low = 100.0
         bars.append(
@@ -382,7 +353,6 @@ def _close_at_support_bars() -> list[dict]:
         )
         day += timedelta(days=1)
 
-    # Latest bar closes just above the ~100 support.
     bars[-1]["close"] = 100.6
     bars[-1]["low"] = 100.1
     bars[-1]["high"] = 101.2
@@ -413,7 +383,6 @@ def test_close_at_support_false_when_clearly_broken():
     from app.close_at_support import detect_close_at_support
 
     bars = _close_at_support_bars()
-    # Crash well below the ~100 support.
     bars[-1]["close"] = 96.0
     bars[-1]["low"] = 95.5
     bars[-1]["high"] = 96.5
@@ -425,11 +394,10 @@ def test_close_at_support_false_when_clearly_broken():
 def test_evaluate_includes_close_at_support_flag():
     stock_bars, spy_bars = _uptrend_pair()
     row = evaluate(
-        {"symbol": "EXM", "name": "Example", "groups": ["sp500"], "sector": None, "industry": None},
+        {"symbol": "EXM", "name": "Example", "groups": ["us"], "sector": None, "industry": None},
         stock_bars,
         {"price": stock_bars[-1]["close"], "marketCap": 80e9, "quoteType": "EQUITY", "exchangeName": "NasdaqGS"},
         spy_bars,
-        vendor_beta=1.2,
     )
     assert "closeAtSupport" in row
     assert isinstance(row["closeAtSupport"], bool)

@@ -1,7 +1,6 @@
-"""Stage 2 maths: moving averages, beta, relative strength, and the rank score.
+"""Stage 2 maths: moving averages, relative strength, and the rank score.
 
 Thresholds follow publicly described Stage 2 filters.
-This is an educational approximation, not a proprietary indicator.
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ PENNY_PRICE = 5.0
 MICRO_CAP = 300_000_000
 
 # Bump when score parts / RS definition change so cached rows recompute.
-SCORE_RULE_VERSION = 3
+SCORE_RULE_VERSION = 4
 
 # Freed nearHigh(15)+beta(5)=20 → slope / vsSma200 / rs / liquidity.
 SCORE_MAX = {

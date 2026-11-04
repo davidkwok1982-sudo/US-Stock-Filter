@@ -1,7 +1,12 @@
-"""S&P 500, S&P MidCap 400, and Nasdaq-100 constituents.
+"""Broad US equity universe from Nasdaq Trader symbol directories.
 
-Live lists come from Wikipedia wikitext. A JSON snapshot in data/universe.json
-is refreshed whenever a live fetch succeeds, and used if Wikipedia is down.
+Live lists (no API key):
+- https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt
+- https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt
+
+Keeps US-listed ordinary/common shares; excludes ETF/ETN/NextShares, ADR/ADS,
+test issues, warrants, units, preferred, and rights when clearly flagged.
+A JSON snapshot in data/universe.json is refreshed on success and used if download fails.
 """
 
 from __future__ import annotations
@@ -14,130 +19,133 @@ import httpx
 
 from app.config import UNIVERSE_PATH, USER_AGENT
 
-WIKI = "https://en.wikipedia.org/w/api.php"
-PAGES = (
-    ("sp500", "List of S&P 500 companies"),
-    ("sp400", "List of S&P 400 companies"),
-    ("ndx", "List of NASDAQ-100 companies"),
-)
+NASDAQ_LISTED = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
+OTHER_LISTED = "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
+
+# otherlisted Exchange column: N=NYSE, A=NYSE American, P=NYSE Arca, Z=BATS, V=IEX
+US_EXCHANGES = frozenset({"N", "A", "P", "Z", "V"})
+
 SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
+
+EXCLUDE_NAME_RE = re.compile(
+    r"("
+    r"American Depositary|"
+    r"\bADS\b|"
+    r"\bADR\b|"
+    r"Depositary Share|"
+    r"\bETF\b|"
+    r"\bETN\b|"
+    r"Exchange[- ]Traded|"
+    r"NextShares|"
+    r"\bWarrant|"
+    r"\bWarrants\b|"
+    r"\bUnit\b|"
+    r"\bUnits\b|"
+    r"Preferred|"
+    r"Preference Share|"
+    r"\bRight\b|"
+    r"\bRights\b|"
+    r"\bNote\b|"
+    r"\bNotes\b|"
+    r"\bBond\b|"
+    r"\bBonds\b|"
+    r"Debenture|"
+    r"Test Issue|"
+    r"Trust Preferred|"
+    r"Structured Product"
+    r")",
+    re.IGNORECASE,
+)
 
 
 def to_yahoo(symbol: str) -> str:
     return symbol.strip().upper().replace(".", "-")
 
 
-def _plain(cell: str) -> str:
-    text = re.sub(r"\[\[(?:[^|\]]+\|)?([^\]]+)\]\]", r"\1", cell)
-    text = re.sub(r"\{\{[^}]+\}\}", "", text)
-    text = re.sub(r"<[^>]+>", "", text)
-    return " ".join(text.replace("&amp;", "&").split())
+def _is_excluded_name(name: str) -> bool:
+    return bool(EXCLUDE_NAME_RE.search(name or ""))
 
 
-def _symbol_from_cell(cell: str) -> str | None:
-    matched = re.search(r"\{\{(?:Nyse|Nasdaq)Symbol\|([^}]+)\}\}", cell)
-    if matched:
-        return matched.group(1).strip()
-    plain = _plain(cell).split()
-    if not plain:
+def _valid_symbol(raw: str) -> str | None:
+    symbol = (raw or "").strip().upper()
+    if not symbol or "$" in symbol or "^" in symbol or "/" in symbol:
         return None
-    token = plain[0].strip()
-    if SYMBOL_RE.fullmatch(token):
-        return token
-    return None
+    if not SYMBOL_RE.fullmatch(symbol):
+        return None
+    return symbol
 
 
-def _split_cells(row: str) -> list[str]:
-    body = row.strip()
-    if body.startswith("|-"):
-        body = body[2:].strip()
-    if not body or body.startswith("!") or body.startswith("|}"):
-        return []
-    if "\n" not in body and "||" in body:
-        parts = [part.strip() for part in body.split("||")]
-        parts[0] = parts[0].lstrip("|").strip()
-        return parts
-    cells: list[str] = []
-    buffer: str | None = None
-    for line in body.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("||"):
-            if buffer is not None:
-                cells.append(buffer.strip())
-            buffer = stripped[2:].strip()
-        elif stripped.startswith("|") and not stripped.startswith("|}"):
-            if buffer is not None:
-                cells.append(buffer.strip())
-            rest = stripped[1:].strip()
-            if "|" in rest and re.match(r"(style|rowspan|colspan|align)=", rest):
-                rest = rest.split("|", 1)[1].strip()
-            buffer = rest
-        elif buffer is not None:
-            buffer = f"{buffer} {stripped}".strip()
-    if buffer is not None:
-        cells.append(buffer.strip())
-    return cells
-
-
-def parse_constituents(wikitext: str, group: str) -> list[dict]:
-    marker = wikitext.find('id="constituents"')
-    if marker < 0:
-        marker = wikitext.find("constituents")
-    section = wikitext[marker:] if marker >= 0 else wikitext
-    end = section.find("\n|}")
-    if end >= 0:
-        section = section[:end]
+def parse_nasdaq_listed(text: str) -> list[dict]:
+    """Parse nasdaqlisted.txt into candidate rows (pre-merge)."""
     rows: list[dict] = []
-    for raw in re.split(r"\n\|-", section):
-        cells = _split_cells(raw)
-        if len(cells) < 2:
+    for line in text.splitlines():
+        if not line or line.startswith("Symbol|") or line.startswith("File Creation"):
             continue
-        symbol = _symbol_from_cell(cells[0])
-        if not symbol:
+        parts = line.split("|")
+        if len(parts) < 8:
             continue
-        name = _plain(cells[1]) or symbol
-        # S&P tables are Symbol, Security, Sector, Sub-Industry.
-        # Nasdaq-100 inserts an ISIN column, which becomes blank once templates are stripped.
-        details = [text for text in (_plain(cell) for cell in cells[2:]) if text]
-        sector = details[0] if details else ""
-        industry = details[1] if len(details) > 1 else ""
-        if sector.lower() in {"gics sector", "icb industry", "sector"}:
+        symbol, name, _cat, test_issue, _status, _lot, etf, next_shares = parts[:8]
+        if test_issue == "Y" or etf == "Y" or next_shares == "Y":
+            continue
+        if _is_excluded_name(name):
+            continue
+        cleaned = _valid_symbol(symbol)
+        if not cleaned:
             continue
         rows.append(
             {
-                "symbol": symbol,
-                "name": name,
-                "sector": sector or None,
-                "industry": industry or None,
-                "group": group,
+                "symbol": cleaned,
+                "name": (name or cleaned).strip(),
+                "sector": None,
+                "industry": None,
+                "group": "us",
+                "venue": "nasdaq",
             }
         )
     return rows
 
 
-def _fetch_wikitext(client: httpx.Client, page: str) -> str:
-    response = client.get(
-        WIKI,
-        params={"action": "parse", "page": page, "prop": "wikitext", "format": "json"},
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if "error" in payload:
-        raise RuntimeError(payload["error"].get("info") or "Wikipedia 沒有這頁")
-    return payload["parse"]["wikitext"]["*"]
-
-
-def fetch_universe() -> list[dict]:
-    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
-    with httpx.Client(headers=headers, timeout=40.0, follow_redirects=True) as client:
-        grouped = []
-        for group, page in PAGES:
-            text = _fetch_wikitext(client, page)
-            parsed = parse_constituents(text, group)
-            if len(parsed) < 50:
-                raise RuntimeError(f"{page} 成份過少（{len(parsed)}）")
-            grouped.extend(parsed)
-    return _merge(grouped)
+def parse_other_listed(text: str) -> list[dict]:
+    """Parse otherlisted.txt into candidate rows (pre-merge)."""
+    rows: list[dict] = []
+    for line in text.splitlines():
+        if not line or line.startswith("ACT Symbol|") or line.startswith("File Creation"):
+            continue
+        parts = line.split("|")
+        if len(parts) < 8:
+            continue
+        act_symbol, name, exchange, _cqs, etf, _lot, test_issue, nasdaq_symbol = parts[:8]
+        if test_issue == "Y" or etf == "Y":
+            continue
+        if exchange not in US_EXCHANGES:
+            continue
+        if _is_excluded_name(name):
+            continue
+        raw = (nasdaq_symbol or act_symbol or "").strip()
+        cleaned = None
+        if raw:
+            # NASDAQ Symbol often already Yahoo-style (BRK-B); ACT may use BRK.B.
+            if re.fullmatch(r"[A-Z][A-Z0-9\-]{0,9}", raw.upper()) and "$" not in raw:
+                cleaned = raw.upper()
+            else:
+                cleaned = _valid_symbol(raw)
+        if cleaned is None:
+            cleaned = _valid_symbol(act_symbol)
+        if not cleaned:
+            continue
+        rows.append(
+            {
+                "symbol": cleaned,
+                "name": (name or cleaned).strip(),
+                "sector": None,
+                "industry": None,
+                "group": "us",
+                "venue": {"N": "nyse", "A": "amex", "P": "arca", "Z": "bats", "V": "iex"}.get(
+                    exchange, "other"
+                ),
+            }
+        )
+    return rows
 
 
 def _merge(items: list[dict]) -> list[dict]:
@@ -146,26 +154,40 @@ def _merge(items: list[dict]) -> list[dict]:
         yahoo = to_yahoo(item["symbol"])
         if not re.fullmatch(r"[A-Z][A-Z0-9\-]{0,9}", yahoo):
             continue
-        current = merged.get(yahoo)
-        if current is None:
-            merged[yahoo] = {
-                "symbol": yahoo,
-                "name": item["name"] or yahoo,
-                "sector": item.get("sector"),
-                "industry": item.get("industry"),
-                "groups": [item["group"]],
-            }
+        if yahoo in merged:
             continue
-        if item["group"] not in current["groups"]:
-            current["groups"].append(item["group"])
-        if not current.get("sector") and item.get("sector"):
-            current["sector"] = item["sector"]
-            current["industry"] = item.get("industry")
+        merged[yahoo] = {
+            "symbol": yahoo,
+            "name": item.get("name") or yahoo,
+            "sector": item.get("sector"),
+            "industry": item.get("industry"),
+            "groups": ["us"],
+            "venue": item.get("venue"),
+        }
     rows = list(merged.values())
-    order = {"sp500": 0, "ndx": 1, "sp400": 2}
-    for row in rows:
-        row["groups"] = sorted(row["groups"], key=lambda name: order.get(name, 9))
     rows.sort(key=lambda row: row["symbol"])
+    return rows
+
+
+def _download(client: httpx.Client, url: str) -> str:
+    response = client.get(url)
+    response.raise_for_status()
+    text = response.text
+    if "Symbol|" not in text and "ACT Symbol|" not in text:
+        raise RuntimeError(f"符號目錄格式異常：{url}")
+    return text
+
+
+def fetch_universe() -> list[dict]:
+    headers = {"User-Agent": USER_AGENT, "Accept": "text/plain,*/*"}
+    with httpx.Client(headers=headers, timeout=60.0, follow_redirects=True) as client:
+        nasdaq_text = _download(client, NASDAQ_LISTED)
+        other_text = _download(client, OTHER_LISTED)
+    nasdaq_rows = parse_nasdaq_listed(nasdaq_text)
+    other_rows = parse_other_listed(other_text)
+    rows = _merge(nasdaq_rows + other_rows)
+    if len(rows) < 1000:
+        raise RuntimeError(f"美股宇宙過少（{len(rows)}），拒絕覆寫")
     return rows
 
 
@@ -173,7 +195,7 @@ def save_universe(rows: list[dict]) -> None:
     UNIVERSE_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "asOf": datetime.now(timezone.utc).date().isoformat(),
-        "source": "wikipedia",
+        "source": "nasdaq-trader",
         "symbols": rows,
     }
     UNIVERSE_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -183,8 +205,7 @@ def load_fallback() -> list[dict]:
     if not UNIVERSE_PATH.exists():
         return []
     payload = json.loads(UNIVERSE_PATH.read_text(encoding="utf-8"))
-    rows = payload.get("symbols") or []
-    return rows
+    return payload.get("symbols") or []
 
 
 def load_universe() -> tuple[list[dict], str]:
@@ -192,7 +213,7 @@ def load_universe() -> tuple[list[dict], str]:
         rows = fetch_universe()
         if rows:
             save_universe(rows)
-            return rows, "wikipedia"
+            return rows, "nasdaq-trader"
     except Exception:
         fallback = load_fallback()
         if fallback:
@@ -201,4 +222,4 @@ def load_universe() -> tuple[list[dict], str]:
     fallback = load_fallback()
     if fallback:
         return fallback, "cache"
-    raise RuntimeError("未能取得指數成份")
+    raise RuntimeError("未能取得美股符號目錄")

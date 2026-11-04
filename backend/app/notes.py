@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-DISCLAIMER = "短線觀察，非投資建議。"
-DISCLAIMER_LONG = (
-    "短線觀察，非投資建議。本內容只按公開描述的第二階段條件作教育用途近似，"
-    "並非任何專有交易系統，亦不構成招攬或買賣建議。"
-)
+DISCLAIMER = ""
+DISCLAIMER_LONG = ""
 
 
 def _px(value: float | None) -> str:
@@ -126,13 +123,6 @@ def build_notes(row: dict, levels: list[dict]) -> dict:
             quality = "未達3,000萬美元的每日成交額門檻"
         prefix = window if row.get("dollarVolumeBasis") == "63d" else "按報價估算，"
         flow.append(f"{prefix}平均每日成交額約 {_usd(dollar)}，{quality}")
-    beta = row.get("beta")
-    if beta is not None and row.get("betaBasis") == "yahoo":
-        flow.append(f"貝他 {beta:.2f}（Yahoo Finance 公布值）")
-    elif beta is not None:
-        flow.append(f"90日貝他 {beta:.2f}（相對 SPY；Yahoo 未提供貝他）")
-    else:
-        flow.append("貝他未能估算")
     supports = [level for level in levels if level["kind"] == "support"]
     resistance = [level for level in levels if level["kind"] == "resistance"]
     if supports:

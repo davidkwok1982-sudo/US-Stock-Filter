@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 GROUP_LABELS = {
+    "us": "美股",
     "sp500": "標普500",
     "ndx": "納指100",
     "sp400": "標普中型400",
@@ -217,5 +218,5 @@ def industry_zh(value: str | None) -> str | None:
 
 
 def group_labels(groups: list[str]) -> list[str]:
-    order = ["sp500", "ndx", "sp400"]
-    return [GROUP_LABELS[g] for g in order if g in groups]
+    order = ["us", "sp500", "ndx", "sp400"]
+    return [GROUP_LABELS[g] for g in order if g in groups and g in GROUP_LABELS]

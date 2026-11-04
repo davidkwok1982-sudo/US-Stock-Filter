@@ -119,6 +119,31 @@ def save_chart(symbol: str, bars: list[dict]) -> None:
         )
 
 
+def upsert_charts(charts: dict[str, list[dict]]) -> None:
+    """Insert or replace chart rows without wiping the rest of the cache."""
+    if not charts:
+        return
+    init_db()
+    rows = [(symbol, _pack(bars)) for symbol, bars in charts.items()]
+    with _connect() as conn:
+        conn.execute("BEGIN")
+        conn.executemany("INSERT OR REPLACE INTO charts (symbol, payload) VALUES (?, ?)", rows)
+        conn.commit()
+
+
+def prune_charts(keep: set[str]) -> None:
+    """Drop cached charts whose symbols are no longer in the universe (+ SPY)."""
+    init_db()
+    with _connect() as conn:
+        existing = [row[0] for row in conn.execute("SELECT symbol FROM charts").fetchall()]
+        drop = [symbol for symbol in existing if symbol not in keep]
+        if not drop:
+            return
+        conn.execute("BEGIN")
+        conn.executemany("DELETE FROM charts WHERE symbol = ?", [(symbol,) for symbol in drop])
+        conn.commit()
+
+
 def load_fundamentals(symbol: str) -> dict | None:
     init_db()
     with _connect() as conn:

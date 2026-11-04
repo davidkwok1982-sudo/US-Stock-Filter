@@ -1,8 +1,7 @@
 """Yahoo Finance public endpoints. No API key.
 
 Chart history uses the v8 chart API. Quotes and fundamentals need the
-cookie + crumb flow that the site itself uses. Beta is usually absent
-from the quote payload, so the screener estimates it against SPY.
+cookie + crumb flow that the site itself uses.
 """
 
 from __future__ import annotations

@@ -8,7 +8,6 @@ const SORTS = new Set<SortKey>([
   "marketCap",
   "dollarVolume",
   "vsSma200",
-  "beta",
   "rs1w",
   "score",
 ])

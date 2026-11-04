@@ -99,7 +99,7 @@ function openRow(navigate: ReturnType<typeof useNavigate>, symbol: string) {
 }
 
 export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
-  const buckets = useMemo(() => groupByIndustry(rows), [rows])
+  const buckets = useMemo(() => groupByIndustry(rows).slice(0, 10), [rows])
   const maxCount = buckets[0]?.count ?? 0
   const navigate = useNavigate()
 
@@ -120,11 +120,11 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
             細分版塊熱力圖
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            第二階段名單按細分版塊家數排名，先看領導版塊，再在版塊內找評分／相對強度較高的股份。每隻股顯示所屬版塊。
+            第二階段名單按細分版塊家數排名，只顯示頭十位。先看領導版塊，再在版塊內找評分／相對強度較高的股份。
           </p>
         </div>
         <p className="text-sm text-muted-foreground">
-          {buckets.length} 個細分版塊 · {rows.length} 隻
+          頭 {buckets.length} 個細分版塊 · 名單 {rows.length} 隻
         </p>
       </div>
 
@@ -176,7 +176,7 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
           <span className="size-2.5 rounded-sm" style={{ background: "rgba(196,165,116,0.28)" }} />
           家數較少
         </span>
-        <span>排名依第二階段篩選後家數；版塊內按評分排序，並顯示一星期 RS。</span>
+        <span>只顯示家數頭十位；版塊內按評分排序，並顯示一星期 RS。</span>
       </div>
     </section>
   )

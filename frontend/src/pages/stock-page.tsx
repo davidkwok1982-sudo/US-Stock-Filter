@@ -10,8 +10,6 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fetchStock } from "@/lib/api.ts"
 import {
-  betaCaption,
-  formatBeta,
   formatPct,
   formatPrice,
   formatUsdLabeled,
@@ -128,19 +126,16 @@ export function StockPage() {
             </div>
           </header>
 
-          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <Fact label="市值" value={formatUsdLabeled(row.marketCap)} />
             <Fact label="日均成交額" value={formatUsdLabeled(row.dollarVolume)} />
             <Fact label="對200天" value={formatPct(row.vsSma200)} className={toneClass(row.vsSma200)} />
-            <Fact label="貝他" value={`${formatBeta(row.beta)} ${betaCaption(row.betaBasis)}`.trim()} />
           </dl>
 
           <ul className="flex flex-wrap gap-2 text-sm">
             <Gate label="價＞50＞150＞200" ok={!row.failCodes.includes("ma_stack") && (row.maStacked ?? row.aboveSma200)} />
             <Gate label="均線向上" ok={!row.failCodes.includes("ma_slope") && row.slopeUp} />
             <Gate label="市值逾20億" ok={!row.failCodes.includes("cap")} />
-            <Gate label="成交額" ok={!row.failCodes.includes("liquidity")} />
-            <Gate label="貝他≥1" ok={!row.failCodes.includes("beta") && !row.failCodes.includes("beta_missing")} />
           </ul>
           {row.failReasons.length > 0 ? (
             <p className="text-sm text-muted-foreground">未過：{row.failReasons.join("、")}</p>
@@ -249,8 +244,9 @@ export function StockPage() {
                     ))}
                   </ul>
                 </div>
-                <p className="border-t border-border pt-3 text-sm font-medium">{detail.notes.disclaimer}</p>
-                <p className="text-xs leading-relaxed text-muted-foreground">{detail.notes.disclaimerLong}</p>
+                {detail.notes.disclaimer ? (
+                  <p className="border-t border-border pt-3 text-sm font-medium">{detail.notes.disclaimer}</p>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -434,7 +430,7 @@ function CompanyProfileCard({
           <p className="text-muted-foreground">暫無公司簡介。</p>
         )}
         <p className="border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
-          資料來自 Yahoo Finance 公開接口，可能落後或不全。僅供參考，不構成投資建議。
+          資料來自 Yahoo Finance 公開接口，可能落後或不全。
         </p>
       </CardContent>
     </Card>

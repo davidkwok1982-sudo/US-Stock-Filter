@@ -45,8 +45,6 @@ export type ScreenRow = {
   nearHigh: boolean
   closeAtSupport: boolean
   closeAtSupportNote?: string | null
-  beta: number | null
-  betaBasis: "yahoo" | "90d-spy" | null
   ret1w?: number | null
   ret3m: number | null
   ret6m: number | null
@@ -70,10 +68,13 @@ export type ScreenRow = {
 }
 
 export type UniverseCounts = {
-  sp500: number
-  ndx: number
-  sp400: number
   unique: number
+  evaluated?: number
+  partial?: boolean
+  /** @deprecated older snapshots */
+  sp500?: number
+  ndx?: number
+  sp400?: number
 }
 
 export type ScreenMeta = {
@@ -89,8 +90,8 @@ export type ScreenMeta = {
     failMaSlope?: number
     failSma200: number
     failCap: number
-    failLiquidity: number
-    failBeta: number
+    failLiquidity?: number
+    failBeta?: number
     failOtc: number
     failType: number
     microOrOtc: number
@@ -111,7 +112,7 @@ export type ScreenMeta = {
     ret6m: number | null
   }
   source: string
-  betaMethod: string
+  betaMethod?: string
   dollarVolumeMethod: string
   adjustment: string
   ttlHours: number
@@ -189,8 +190,8 @@ export type StockDetail = {
   notes: {
     technical: string[]
     fundamental: string[]
-    disclaimer: string
-    disclaimerLong: string
+    disclaimer?: string
+    disclaimerLong?: string
   }
   /** Company intro from Yahoo assetProfile; null when unavailable. */
   profile?: CompanyProfile | null
@@ -205,7 +206,6 @@ export type SortKey =
   | "marketCap"
   | "dollarVolume"
   | "vsSma200"
-  | "beta"
   | "rs1w" | "rs6m"
   | "score"
 
