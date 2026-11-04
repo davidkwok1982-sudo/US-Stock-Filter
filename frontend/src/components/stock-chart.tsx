@@ -53,7 +53,7 @@ export function StockChart({
   useEffect(() => {
     const element = host.current
     if (!element || bars.length === 0) return
-    // Fit all loaded bars; free zoom remains via chart interaction.
+    // Load full series; initial viewport is a sliced window (zoom/pan can reveal the rest).
     const candles = bars
     const first = candles[0]!.time
 
@@ -270,11 +270,48 @@ export function StockChart({
       panes[1]?.setStretchFactor(0.28)
     }
 
-    chart.timeScale().fitContent()
+    applyDefaultVisibleRange(chart, candles, interval)
     return () => chart.remove()
   }, [bars, index, interval, levels, sma10, sma20, sma50, sma150, sma200])
 
   return <div ref={host} className="h-[520px] w-full sm:h-[680px]" />
+}
+
+
+/** Initial viewport by timeframe; full series stays loaded for zoom-out/pan.
+ * 日線 ~3 months, 週線 ~1 year, 小時 ~2 days.
+ */
+function defaultVisibleCutoff(interval: ChartInterval): ChartTime {
+  const now = Date.now()
+  if (interval === "1h") {
+    return Math.floor(now / 1000) - 2 * 24 * 3600
+  }
+  const days = interval === "1wk" ? 372 : 95
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  return date.toISOString().slice(0, 10)
+}
+
+function applyDefaultVisibleRange(
+  chart: ReturnType<typeof createChart>,
+  candles: Bar[],
+  interval: ChartInterval,
+): void {
+  const last = candles[candles.length - 1]
+  if (!last) {
+    chart.timeScale().fitContent()
+    return
+  }
+  const cutoff = defaultVisibleCutoff(interval)
+  const from = timeAtOrAfter(cutoff, candles[0]!.time) ? cutoff : candles[0]!.time
+  try {
+    chart.timeScale().setVisibleRange({
+      from: toChartTime(from),
+      to: toChartTime(last.time),
+    })
+  } catch {
+    chart.timeScale().fitContent()
+  }
 }
 
 function toChartTime(time: ChartTime): Time {
