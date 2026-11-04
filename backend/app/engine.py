@@ -195,6 +195,14 @@ class Engine:
         if not bars:
             raise LookupError("找不到這隻股份的日線")
         spy = store.load_chart("SPY") or []
+        if not spy:
+            try:
+                spy = client.chart("SPY") or []
+                if spy:
+                    store.save_chart("SPY", spy)
+            except Exception:
+                log.exception("failed to load SPY chart for detail overlay")
+                spy = []
         if row is None:
             if quote is None:
                 quote = client.quotes([symbol]).get(symbol) or {}
@@ -233,6 +241,7 @@ class Engine:
             "bars": [_public_bar(bar) for bar in bars],
             "sma50": _sma_points(bars, SMA_FAST),
             "sma200": _sma_points(bars, SMA_SLOW),
+            "index": _index_series(spy, symbol="SPY", label="標普500（SPY）"),
             "levels": levels,
             "notes": notes,
             "meta": None if snapshot is None else snapshot["meta"],
@@ -262,6 +271,15 @@ def normalize_symbol(symbol: str) -> str:
     if not SYMBOL_RE.fullmatch(cleaned):
         raise ValueError("代號格式不正確")
     return cleaned
+
+
+
+def _index_series(bars: list[dict], *, symbol: str, label: str) -> dict:
+    """Close series for chart overlay; empty closes when the benchmark is missing."""
+    closes = []
+    for bar in bars:
+        closes.append({"time": bar["time"], "value": round(bar["close"], 4 if bar["close"] < 1 else 2)})
+    return {"symbol": symbol, "label": label, "closes": closes}
 
 
 def _public_bar(bar: dict) -> dict:

@@ -135,11 +135,18 @@ export type PriceLevel = {
   label: string
 }
 
+export type IndexSeries = {
+  symbol: string
+  label: string
+  closes: LinePoint[]
+}
+
 export type StockDetail = {
   row: ScreenRow
   bars: Bar[]
   sma50: LinePoint[]
   sma200: LinePoint[]
+  index: IndexSeries | null
   levels: PriceLevel[]
   notes: {
     technical: string[]
