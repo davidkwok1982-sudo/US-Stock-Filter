@@ -18,13 +18,10 @@ const ORANGE = "#d4896a"
 const GOLD = "#e0b15a"
 const BLUE = "#8eb4ea"
 const MA_LINE_WIDTH = 1 as const
-const RS_MACD = "#e0b15a"
-const RS_SIGNAL = "#8eb4ea"
-/** Short MACD(5,13,5) on 1w RS needs lookback + ~18 points. */
-const RS_MIN_POINTS = 20
-const RS_MACD_FAST = 5
-const RS_MACD_SLOW = 13
-const RS_MACD_SIGNAL = 5
+const RS_LINE = "#e0b15a"
+/** Excess return % vs SPY over N bars of the current timeframe. */
+const RS_LINE_BARS = 5
+const RS_HIST_BARS = 20
 
 export function StockChart({
   bars,
@@ -58,12 +55,12 @@ export function StockChart({
     const first = candles[0]!.time
 
     const indexBars = indexCandles(index, first)
-    // Use full history for EMA warmup, then plot from visible range.
+    // Align SPY from full stock history so early excess points are available.
     const indexAll = indexCandles(index, bars[0]?.time ?? first)
-    const rsMacd = computeRsMacd(bars, indexAll.length > 0 ? indexAll : indexBars, interval).filter((point) =>
+    const rsPoints = computeRsExcess(bars, indexAll.length > 0 ? indexAll : indexBars).filter((point) =>
       timeAtOrAfter(point.time, first),
     )
-    const showRs = rsMacd.length > 0
+    const showRs = rsPoints.length > 0
 
     const chart = createChart(element, {
       autoSize: true,
@@ -175,6 +172,7 @@ export function StockChart({
     )
 
     // RS pane sits under volume (before SPY is created/moved).
+    // Histogram = 20-bar excess % vs SPY; line = 5-bar excess %; zero = flat vs SPY.
     let rsPane = null as ReturnType<typeof chart.addPane> | null
     if (showRs) {
       rsPane = chart.addPane(false)
@@ -186,7 +184,7 @@ export function StockChart({
       })
       hist.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.08 } })
       hist.setData(
-        rsMacd.map((point) => ({
+        rsPoints.map((point) => ({
           time: toChartTime(point.time),
           value: point.hist,
           color: point.hist >= 0 ? "rgba(196,51,43,0.65)" : "rgba(28,122,69,0.65)",
@@ -201,25 +199,15 @@ export function StockChart({
         title: "",
       })
 
-      const macdLine = rsPane.addSeries(LineSeries, {
-        color: RS_MACD,
+      const rsLine = rsPane.addSeries(LineSeries, {
+        color: RS_LINE,
         lineWidth: 2,
         priceLineVisible: false,
-        lastValueVisible: false,
+        lastValueVisible: true,
         crosshairMarkerVisible: false,
         priceFormat: { type: "price", precision: 2, minMove: 0.01 },
       })
-      macdLine.setData(rsMacd.map((point) => ({ time: toChartTime(point.time), value: point.macd })))
-
-      const signalLine = rsPane.addSeries(LineSeries, {
-        color: RS_SIGNAL,
-        lineWidth: 2,
-        priceLineVisible: false,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
-        priceFormat: { type: "price", precision: 2, minMove: 0.01 },
-      })
-      signalLine.setData(rsMacd.map((point) => ({ time: toChartTime(point.time), value: point.signal })))
+      rsLine.setData(rsPoints.map((point) => ({ time: toChartTime(point.time), value: point.line })))
     }
 
     let spyPane = null as ReturnType<typeof chart.addPane> | null
@@ -353,16 +341,17 @@ function indexCandles(index: IndexSeries | null, firstTime: ChartTime): Bar[] {
     }))
 }
 
-type RsMacdPoint = { time: ChartTime; macd: number; signal: number; hist: number }
+type RsExcessPoint = { time: ChartTime; line: number; hist: number }
 
 /**
- * ~1-week relative strength vs SPY, then short MACD for display.
+ * Excess return % vs SPY on the current chart timeframe.
  *
- * Lookback by interval: 1d→5 bars, 1wk→1 bar, 1h→33 hourly bars (~1 trading week).
- * rs1w = stockReturn(lookback) - spyReturn(lookback); scaled ×100 (percentage points).
- * MACD(5,13,5) on that series. Above ~0 ≈ 近一星期強於／偏強於大盤.
+ * line  = (stockRet − spyRet)×100 over RS_LINE_BARS bars
+ * hist  = (stockRet − spyRet)×100 over RS_HIST_BARS bars
+ * Positive = beat SPY; negative = lag. Soft filters 跑贏 SPY 5/20 天 use the
+ * same close-to-close excess idea on daily bars.
  */
-function computeRsMacd(stockBars: Bar[], spyBars: Bar[], interval: ChartInterval): RsMacdPoint[] {
+function computeRsExcess(stockBars: Bar[], spyBars: Bar[]): RsExcessPoint[] {
   if (stockBars.length === 0 || spyBars.length === 0) return []
 
   const spyClose = new Map<string, number>()
@@ -382,73 +371,29 @@ function computeRsMacd(stockBars: Bar[], spyBars: Bar[], interval: ChartInterval
     spyCloses.push(spy)
   }
 
-  const lookback = rsLookbackBars(interval)
-  if (alignedTimes.length < lookback + RS_MIN_POINTS) return []
+  if (alignedTimes.length <= RS_HIST_BARS) return []
 
-  const rs1w: number[] = []
-  const rsTimes: ChartTime[] = []
-  for (let i = lookback; i < alignedTimes.length; i++) {
-    const stockPrev = stockCloses[i - lookback]!
-    const spyPrev = spyCloses[i - lookback]!
-    if (stockPrev <= 0 || spyPrev <= 0) continue
-    const stockRet = stockCloses[i]! / stockPrev - 1
-    const spyRet = spyCloses[i]! / spyPrev - 1
-    // Percentage points so the pane scale stays readable.
-    rs1w.push((stockRet - spyRet) * 100)
-    rsTimes.push(alignedTimes[i]!)
-  }
-
-  if (rs1w.length < RS_MIN_POINTS) return []
-
-  const emaFast = emaSeries(rs1w, RS_MACD_FAST)
-  const emaSlow = emaSeries(rs1w, RS_MACD_SLOW)
-
-  const macdValues: number[] = []
-  const macdTimes: ChartTime[] = []
-  for (let i = 0; i < rs1w.length; i++) {
-    const fast = emaFast[i]
-    const slow = emaSlow[i]
-    if (fast == null || slow == null) continue
-    macdValues.push(fast - slow)
-    macdTimes.push(rsTimes[i]!)
-  }
-
-  if (macdValues.length < RS_MACD_SIGNAL) return []
-
-  const signal = emaSeries(macdValues, RS_MACD_SIGNAL)
-  const out: RsMacdPoint[] = []
-  for (let i = 0; i < macdValues.length; i++) {
-    const sig = signal[i]
-    if (sig == null) continue
-    const macd = macdValues[i]!
-    out.push({
-      time: macdTimes[i]!,
-      macd,
-      signal: sig,
-      hist: macd - sig,
-    })
+  const out: RsExcessPoint[] = []
+  for (let i = RS_HIST_BARS; i < alignedTimes.length; i++) {
+    const line = excessPct(stockCloses, spyCloses, i, RS_LINE_BARS)
+    const hist = excessPct(stockCloses, spyCloses, i, RS_HIST_BARS)
+    if (line == null || hist == null) continue
+    out.push({ time: alignedTimes[i]!, line, hist })
   }
   return out
 }
 
-/** Trading bars that approximate one week for each chart interval. */
-function rsLookbackBars(interval: ChartInterval): number {
-  if (interval === "1wk") return 1
-  if (interval === "1h") return 33 // ~6.5 sessions × ~5 RTH hours
-  return 5 // 1d: five trading days
-}
-
-function emaSeries(values: number[], period: number): (number | null)[] {
-  const out: (number | null)[] = Array.from({ length: values.length }, () => null)
-  if (values.length < period || period <= 0) return out
-  const k = 2 / (period + 1)
-  let sum = 0
-  for (let i = 0; i < period; i++) sum += values[i]!
-  let prev = sum / period
-  out[period - 1] = prev
-  for (let i = period; i < values.length; i++) {
-    prev = values[i]! * k + prev * (1 - k)
-    out[i] = prev
-  }
-  return out
+function excessPct(
+  stockCloses: number[],
+  spyCloses: number[],
+  index: number,
+  period: number,
+): number | null {
+  if (index < period) return null
+  const stockPrev = stockCloses[index - period]!
+  const spyPrev = spyCloses[index - period]!
+  if (stockPrev <= 0 || spyPrev <= 0) return null
+  const stockRet = stockCloses[index]! / stockPrev - 1
+  const spyRet = spyCloses[index]! / spyPrev - 1
+  return (stockRet - spyRet) * 100
 }
