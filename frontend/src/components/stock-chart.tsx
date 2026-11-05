@@ -18,10 +18,8 @@ const ORANGE = "#d4896a"
 const GOLD = "#e0b15a"
 const BLUE = "#8eb4ea"
 const MA_LINE_WIDTH = 1 as const
-const RS_LINE = "#e0b15a"
-/** Excess return % vs SPY over N bars of the current timeframe. */
-const RS_LINE_BARS = 5
-const RS_HIST_BARS = 20
+/** Same-bar excess return % vs SPY: (stockRet − spyRet)×100. */
+const RS_BAR_PERIOD = 1
 
 export function StockChart({
   bars,
@@ -171,14 +169,13 @@ export function StockChart({
       })),
     )
 
-    // RS pane sits under volume (before SPY is created/moved).
-    // Histogram = 20-bar excess % vs SPY; line = 5-bar excess %; zero = flat vs SPY.
+    // RS pane under volume: one histogram = same-bar excess % vs SPY; zero = flat vs SPY.
     let rsPane = null as ReturnType<typeof chart.addPane> | null
     if (showRs) {
       rsPane = chart.addPane(false)
       const hist = rsPane.addSeries(HistogramSeries, {
         priceLineVisible: false,
-        lastValueVisible: false,
+        lastValueVisible: true,
         title: "",
         priceFormat: { type: "price", precision: 2, minMove: 0.01 },
       })
@@ -186,8 +183,8 @@ export function StockChart({
       hist.setData(
         rsPoints.map((point) => ({
           time: toChartTime(point.time),
-          value: point.hist,
-          color: point.hist >= 0 ? "rgba(196,51,43,0.65)" : "rgba(28,122,69,0.65)",
+          value: point.value,
+          color: point.value >= 0 ? "rgba(196,51,43,0.65)" : "rgba(28,122,69,0.65)",
         })),
       )
       hist.createPriceLine({
@@ -198,16 +195,6 @@ export function StockChart({
         axisLabelVisible: false,
         title: "",
       })
-
-      const rsLine = rsPane.addSeries(LineSeries, {
-        color: RS_LINE,
-        lineWidth: 2,
-        priceLineVisible: false,
-        lastValueVisible: true,
-        crosshairMarkerVisible: false,
-        priceFormat: { type: "price", precision: 2, minMove: 0.01 },
-      })
-      rsLine.setData(rsPoints.map((point) => ({ time: toChartTime(point.time), value: point.line })))
     }
 
     let spyPane = null as ReturnType<typeof chart.addPane> | null
@@ -341,15 +328,14 @@ function indexCandles(index: IndexSeries | null, firstTime: ChartTime): Bar[] {
     }))
 }
 
-type RsExcessPoint = { time: ChartTime; line: number; hist: number }
+type RsExcessPoint = { time: ChartTime; value: number }
 
 /**
- * Excess return % vs SPY on the current chart timeframe.
+ * Same-bar excess return % vs SPY on the current chart timeframe.
  *
- * line  = (stockRet − spyRet)×100 over RS_LINE_BARS bars
- * hist  = (stockRet − spyRet)×100 over RS_HIST_BARS bars
- * Positive = beat SPY; negative = lag. Soft filters 跑贏 SPY 5/20 天 use the
- * same close-to-close excess idea on daily bars.
+ * value = (stockBarReturn − spyBarReturn)×100 for each aligned bar
+ * Positive = beat SPY that bar; negative = lag. Soft filters 跑贏 SPY 5/20 天
+ * stay on daily multi-day close-to-close excess (unchanged).
  */
 function computeRsExcess(stockBars: Bar[], spyBars: Bar[]): RsExcessPoint[] {
   if (stockBars.length === 0 || spyBars.length === 0) return []
@@ -371,14 +357,13 @@ function computeRsExcess(stockBars: Bar[], spyBars: Bar[]): RsExcessPoint[] {
     spyCloses.push(spy)
   }
 
-  if (alignedTimes.length <= RS_HIST_BARS) return []
+  if (alignedTimes.length <= RS_BAR_PERIOD) return []
 
   const out: RsExcessPoint[] = []
-  for (let i = RS_HIST_BARS; i < alignedTimes.length; i++) {
-    const line = excessPct(stockCloses, spyCloses, i, RS_LINE_BARS)
-    const hist = excessPct(stockCloses, spyCloses, i, RS_HIST_BARS)
-    if (line == null || hist == null) continue
-    out.push({ time: alignedTimes[i]!, line, hist })
+  for (let i = RS_BAR_PERIOD; i < alignedTimes.length; i++) {
+    const value = excessPct(stockCloses, spyCloses, i, RS_BAR_PERIOD)
+    if (value == null) continue
+    out.push({ time: alignedTimes[i]!, value })
   }
   return out
 }

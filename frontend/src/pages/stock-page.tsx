@@ -180,7 +180,7 @@ export function StockPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-[#d9d2c5]">
               <p>
                 上方指數（SPY）陰陽燭 · 升紅跌綠 · {smaHint(chartInterval)} · 成交量 · 相對強度
-                RS（線＝5棒超額% · 柱＝20棒超額% vs SPY · 零軸）
+                RS（同棒超額% vs SPY · 正＝跑贏 · 負＝落後 · 零軸）
                 {chartInterval === "1d" ? " · 虛線中軸為支持／阻力（結構＋均線匯合；篩選仍用 ±0.5×ATR 區）" : ""}
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -250,7 +250,7 @@ export function StockPage() {
               <p className="text-sm text-muted-foreground">近期未見足夠觸及（≥2）的結構高低位，未能標出可靠的支持或阻力。</p>
             )
           ) : (
-            <p className="text-sm text-muted-foreground">支持／阻力僅在日線顯示；週線與小時圖顯示陰陽燭、均線、成交量與相對強度 RS（線＝當前週期 5 棒超額%、柱＝20 棒超額% vs SPY）。資料點太少時會隱藏 RS 窗格。</p>
+            <p className="text-sm text-muted-foreground">支持／阻力僅在日線顯示；週線與小時圖顯示陰陽燭、均線、成交量與相對強度 RS（同棒超額%＝該棒股票回報減 SPY 回報 · 正＝跑贏 · 負＝落後）。資料點太少時會隱藏 RS 窗格。</p>
           )}
 
           <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
