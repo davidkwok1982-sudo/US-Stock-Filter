@@ -6,6 +6,7 @@ import {
   LineSeries,
   LineStyle,
   createChart,
+  createTextWatermark,
   type MouseEventParams,
   type Time,
 } from "lightweight-charts"
@@ -249,6 +250,12 @@ export function StockChart({
       panes[1]?.setStretchFactor(0.28)
     }
 
+    // Discreet top-left pane titles (native LWC text watermarks; no tooltip impact).
+    labelPane(spyPane, "SPY")
+    labelPane(stockPane, "股價")
+    labelPane(volumePane, "成交量")
+    labelPane(rsPane, "RS")
+
     applyDefaultVisibleRange(chart, candles, interval)
 
     // OHLC + change% popup: stock pane → stock; SPY pane → SPY; hide on volume/RS.
@@ -386,17 +393,40 @@ export function StockChart({
 
 
 /** Initial viewport by timeframe; full series stays loaded for zoom-out/pan.
- * 日線 ~3 months, 週線 ~1 year, 小時 ~2 days.
+ * 日線 ~3 months, 週線 ~1 year, 小時 ~1 week.
  */
 function defaultVisibleCutoff(interval: ChartInterval): ChartTime {
   const now = Date.now()
   if (interval === "1h") {
-    return Math.floor(now / 1000) - 2 * 24 * 3600
+    return Math.floor(now / 1000) - 7 * 24 * 3600
   }
   const days = interval === "1wk" ? 372 : 95
   const date = new Date()
   date.setDate(date.getDate() - days)
   return date.toISOString().slice(0, 10)
+}
+
+
+function labelPane(
+  pane: ReturnType<ReturnType<typeof createChart>["addPane"]> | null | undefined,
+  text: string,
+): void {
+  if (!pane) return
+  createTextWatermark(pane, {
+    visible: true,
+    horzAlign: "left",
+    vertAlign: "top",
+    lines: [
+      {
+        text,
+        color: "rgba(217, 210, 197, 0.42)",
+        fontSize: 11,
+        lineHeight: 14,
+        fontFamily: '"IBM Plex Mono", "Noto Sans TC", sans-serif',
+        fontStyle: "600",
+      },
+    ],
+  })
 }
 
 function applyDefaultVisibleRange(
