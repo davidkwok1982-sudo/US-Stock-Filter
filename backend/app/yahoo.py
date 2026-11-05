@@ -72,6 +72,40 @@ def normalize_quote(payload: dict) -> dict:
     }
 
 
+def normalize_quote_summary(payload: dict) -> dict | None:
+    """Build a quote dict from quoteSummary price/summaryDetail modules."""
+    result = (payload.get("quoteSummary") or {}).get("result") or []
+    if not result:
+        return None
+    block = result[0] or {}
+    price = block.get("price") or {}
+    detail = block.get("summaryDetail") or {}
+    flat = {
+        "regularMarketPrice": _raw(price.get("regularMarketPrice")),
+        "regularMarketChangePercent": _raw(price.get("regularMarketChangePercent")),
+        "marketCap": _raw(price.get("marketCap")) or _raw(detail.get("marketCap")),
+        "averageDailyVolume3Month": _raw(detail.get("averageDailyVolume3Month"))
+        or _raw(price.get("averageDailyVolume3Month")),
+        "trailingPE": _raw(detail.get("trailingPE")) or _raw(price.get("trailingPE")),
+        "longName": (price.get("longName") or price.get("shortName")),
+        "shortName": price.get("shortName"),
+        "exchange": price.get("exchange"),
+        "fullExchangeName": price.get("exchangeName"),
+        "quoteType": price.get("quoteType"),
+        "regularMarketTime": _raw(price.get("regularMarketTime")),
+        "currency": price.get("currency"),
+        "sector": None,
+        "industry": None,
+    }
+    # changePercent from summary is often already a fraction in raw; price module uses percent.
+    change = flat["regularMarketChangePercent"]
+    # normalize_quote divides by 100 when reading regularMarketChangePercent from v7
+    # (where it is a percent). quoteSummary raw is usually a fraction already.
+    if change is not None and abs(change) <= 1.0:
+        flat["regularMarketChangePercent"] = change * 100.0
+    return normalize_quote(flat)
+
+
 # Chart interval -> Yahoo query. Weekly uses 5y so SMA200 (200 weeks) can form.
 # Hourly uses 60d (Yahoo's practical 1h window); SMA50/200 stay bar-count windows.
 CHART_INTERVALS = {
@@ -221,6 +255,7 @@ class YahooClient:
             "https://query1.finance.yahoo.com/v7/finance/quote",
             "https://query2.finance.yahoo.com/v7/finance/quote",
         )
+        missing: list[str] = []
         for start in range(0, len(symbols), 80):
             chunk = symbols[start : start + 80]
             got_chunk = False
@@ -243,7 +278,6 @@ class YahooClient:
                     continue
                 results = (payload.get("quoteResponse") or {}).get("result") or []
                 if not results:
-                    # Empty result usually means a stale crumb; refresh and try next host.
                     with self._crumb_lock:
                         self._crumb = None
                     continue
@@ -254,7 +288,38 @@ class YahooClient:
                 got_chunk = True
                 break
             if not got_chunk:
-                time.sleep(0.5)
+                missing.extend(chunk)
+        if missing:
+            found.update(self._quotes_via_summary(missing))
+        return found
+
+    def _quotes_via_summary(self, symbols: list[str]) -> dict[str, dict]:
+        """Fallback when batch v7 quotes are blocked (common on some cloud IPs)."""
+        found: dict[str, dict] = {}
+        lock = threading.Lock()
+
+        def job(symbol: str) -> None:
+            response = self._get(
+                self._main,
+                f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{quote(symbol, safe='-')}",
+                params={"modules": "price,summaryDetail"},
+                auth=True,
+                max_attempts=3,
+            )
+            if response is None:
+                return
+            try:
+                parsed = normalize_quote_summary(response.json())
+            except ValueError:
+                return
+            if parsed is None:
+                return
+            with lock:
+                found[symbol] = parsed
+
+        workers = min(16, max(4, len(symbols)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(job, symbols))
         return found
 
     def chart(self, symbol: str, interval: str = "1d") -> list[dict] | None:
