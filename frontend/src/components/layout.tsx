@@ -47,7 +47,7 @@ export function Layout() {
             {refreshing ? "更新中" : "重新整理"}
           </Button>
         </div>
-        <div className="h-[3px] bg-up" />
+        <div className="h-[3px] bg-primary" />
       </header>
 
       <div className="mx-auto flex max-w-6xl flex-wrap items-baseline justify-end gap-2 px-4 py-2 text-xs text-muted-foreground">
@@ -74,7 +74,7 @@ export function Layout() {
             key={link.label}
             to={link.label === "個股詳情" ? stockTarget : link.to}
             end={link.end}
-            className={({ isActive }) => `px-2 py-3 text-center text-sm ${isActive ? "text-up" : "text-muted-foreground"}`}
+            className={({ isActive }) => `px-2 py-3 text-center text-sm ${isActive ? "text-primary" : "text-muted-foreground"}`}
           >
             {link.label}
           </NavLink>

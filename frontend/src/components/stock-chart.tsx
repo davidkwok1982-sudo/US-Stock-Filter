@@ -12,8 +12,8 @@ import {
 
 import type { Bar, ChartInterval, ChartTime, IndexSeries, LinePoint, PriceLevel } from "@/lib/types.ts"
 
-const UP = "#c4332b"
-const DOWN = "#1c7a45"
+const UP = "#1c7a45"
+const DOWN = "#c4332b"
 const SILVER = "#c9c4b8"
 const ORANGE = "#d4896a"
 const GOLD = "#e0b15a"
@@ -168,7 +168,7 @@ export function StockChart({
       candles.map((bar) => ({
         time: toChartTime(bar.time),
         value: bar.volume,
-        color: bar.close >= bar.open ? "rgba(196,51,43,0.55)" : "rgba(28,122,69,0.55)",
+        color: bar.close >= bar.open ? "rgba(28,122,69,0.55)" : "rgba(196,51,43,0.55)",
       })),
     )
 
@@ -187,7 +187,7 @@ export function StockChart({
         rsPoints.map((point) => ({
           time: toChartTime(point.time),
           value: point.value,
-          color: point.value >= 0 ? "rgba(196,51,43,0.65)" : "rgba(28,122,69,0.65)",
+          color: point.value >= 0 ? "rgba(28,122,69,0.65)" : "rgba(196,51,43,0.65)",
         })),
       )
       hist.createPriceLine({
