@@ -103,6 +103,11 @@ export function StrategyPage() {
           <li>
             收市近支持：見上文第 6 步。全量更新時會重算，規則版本變更時亦會用已存日線重填此欄。
           </li>
+          <li>
+            近一星期升幅：股份本身近約 5 個交易日收市對收市升幅 ≥ 你輸入的 X%（網址參數
+            <code className="mx-1 rounded bg-secondary px-1">gain1w</code>
+            ；預設 5）。唔係相對 SPY。
+          </li>
         </ul>
       </section>
 

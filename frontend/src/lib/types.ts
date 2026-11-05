@@ -226,6 +226,8 @@ export type Filters = {
   q: string
   rs: boolean
   support: boolean
+  /** Soft filter: keep rows with ret1w >= gain1w/100. null = off. */
+  gain1w: number | null
   sort: SortKey
   dir: "asc" | "desc"
 }

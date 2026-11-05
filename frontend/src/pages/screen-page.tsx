@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 
 import { IndustryHeatmap } from "@/components/industry-heatmap.tsx"
@@ -16,6 +16,8 @@ const TOGGLES: { key: "rs" | "support"; label: string; hint: string }[] = [
   { key: "support", label: "收市近支持", hint: "最新收市價落在結構支持區內（清晰擺動低點＋近20／60日區間低點，須≥2次觸及；區間為中軸±0.5×ATR）。與圖表支持位同一套定義" },
 ]
 
+const DEFAULT_GAIN1W = 5
+
 export function ScreenPage() {
   const { data, loadError, refresh } = useScreen()
   useEffect(() => {
@@ -30,6 +32,42 @@ export function ScreenPage() {
 
   function toggle(key: "rs" | "support") {
     update({ ...filters, [key]: !filters[key] })
+  }
+
+  const [gainDraft, setGainDraft] = useState<string | null>(null)
+  const gainActive = filters.gain1w != null
+  const gainInput = gainDraft ?? (gainActive ? String(filters.gain1w) : "")
+
+  useEffect(() => {
+    // Sync draft when URL/filter changes from outside (e.g. clear / toggle off).
+    if (filters.gain1w == null) setGainDraft(null)
+  }, [filters.gain1w])
+
+  function toggleGain1w() {
+    if (filters.gain1w != null) {
+      setGainDraft(null)
+      update({ ...filters, gain1w: null })
+      return
+    }
+    setGainDraft(String(DEFAULT_GAIN1W))
+    update({ ...filters, gain1w: DEFAULT_GAIN1W })
+  }
+
+  function onGain1wChange(raw: string) {
+    setGainDraft(raw)
+    const trimmed = raw.trim()
+    if (trimmed === "" || trimmed === "-" || trimmed === "." || trimmed === "-.") return
+    const n = Number(trimmed)
+    if (!Number.isFinite(n)) return
+    update({ ...filters, gain1w: n })
+  }
+
+  function onGain1wBlur() {
+    if (filters.gain1w == null) {
+      setGainDraft(null)
+      return
+    }
+    setGainDraft(String(filters.gain1w))
   }
 
   function onSort(key: SortKey) {
@@ -114,7 +152,7 @@ export function ScreenPage() {
               />
               <p className="text-sm text-muted-foreground">顯示 {rows.length} 隻 · 通過家數 {passCount}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {TOGGLES.map((item) => {
                 const on = Boolean(filters[item.key])
                 return (
@@ -131,11 +169,45 @@ export function ScreenPage() {
                   </Button>
                 )
               })}
+              <div
+                className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 ${
+                  filters.gain1w != null ? "border-transparent bg-primary text-primary-foreground" : "border-border bg-background"
+                }`}
+                title="近約 5 個交易日（一星期）收市對收市升幅；只計股份本身，唔係相對 SPY。可輸入門檻百分比。"
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={filters.gain1w != null ? "default" : "outline"}
+                  className="h-7 border-0 shadow-none"
+                  aria-pressed={filters.gain1w != null}
+                  onClick={toggleGain1w}
+                >
+                  近一星期升幅
+                </Button>
+                {filters.gain1w != null ? (
+                  <>
+                    <span className="text-xs opacity-80">&gt;</span>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.5"
+                      value={gainInput}
+                      onChange={(event) => onGain1wChange(event.target.value)}
+                      onBlur={onGain1wBlur}
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label="近一星期升幅門檻百分比"
+                      className="h-7 w-16 border-0 bg-background/20 px-1.5 text-center text-sm text-inherit shadow-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                    <span className="pr-1 text-xs opacity-80">%</span>
+                  </>
+                ) : null}
+              </div>
             </div>
             <details className="text-sm text-muted-foreground">
               <summary className="cursor-pointer text-foreground">怎樣讀這張表</summary>
               <p className="mt-2 max-w-3xl leading-relaxed">
-                預設只列出通過篩選的股份：現價＞50天線＞150天線＞200天線、三條均線過去約一星期都向上、市值逾20億美元。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「跑贏 SPY」須近約 5 個與 20 個交易日收市對收市總回報減 SPY 皆為正。「收市近支持」以結構支持區（擺動＋近20／60日低點、≥2次觸及、±0.5×ATR）判斷；最新收市須落在該區內。
+                預設只列出通過篩選的股份：現價＞50天線＞150天線＞200天線、三條均線過去約一星期都向上、市值逾20億美元。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「跑贏 SPY」須近約 5 個與 20 個交易日收市對收市總回報減 SPY 皆為正。「收市近支持」以結構支持區（擺動＋近20／60日低點、≥2次觸及、±0.5×ATR）判斷；最新收市須落在該區內。「近一星期升幅」要求股份本身近約 5 個交易日收市對收市升幅達到你輸入的門檻（預設 5%），唔係相對 SPY。
                 <Link to="/strategy" className="ml-2 text-foreground underline underline-offset-4">
                   策略說明
                 </Link>
@@ -159,6 +231,7 @@ export function ScreenPage() {
                     q: "",
                     rs: false,
                     support: false,
+                    gain1w: null,
                   })
                 }
               >
