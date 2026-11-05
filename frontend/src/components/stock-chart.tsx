@@ -201,9 +201,10 @@ export function StockChart({
     }
 
     let spyPane = null as ReturnType<typeof chart.addPane> | null
+    let spySeries: typeof candle | null = null
     if (indexBars.length > 0) {
       spyPane = chart.addPane(false)
-      const spy = spyPane.addSeries(CandlestickSeries, {
+      spySeries = spyPane.addSeries(CandlestickSeries, {
         upColor: UP,
         downColor: DOWN,
         borderUpColor: UP,
@@ -214,8 +215,8 @@ export function StockChart({
         title: "",
         lastValueVisible: true,
       })
-      spy.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } })
-      spy.setData(
+      spySeries.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } })
+      spySeries.setData(
         indexBars.map((bar) => ({
           time: toChartTime(bar.time),
           open: bar.open,
@@ -250,13 +251,22 @@ export function StockChart({
 
     applyDefaultVisibleRange(chart, candles, interval)
 
-    // OHLC + change% popup via lightweight-charts crosshair move.
+    // OHLC + change% popup: stock pane → stock; SPY pane → SPY; hide on volume/RS.
     const barByTime = new Map<string, { bar: Bar; prevClose: number | null }>()
     for (let i = 0; i < candles.length; i++) {
       const bar = candles[i]!
       const prev = i > 0 ? candles[i - 1]!.close : null
       barByTime.set(timeKey(bar.time), { bar, prevClose: prev })
     }
+    const spyByTime = new Map<string, { bar: Bar; prevClose: number | null }>()
+    for (let i = 0; i < indexBars.length; i++) {
+      const bar = indexBars[i]!
+      const prev = i > 0 ? indexBars[i - 1]!.close : null
+      spyByTime.set(timeKey(bar.time), { bar, prevClose: prev })
+    }
+
+    const stockPaneIndex = candle.getPane().paneIndex()
+    const spyPaneIndex = spySeries ? spySeries.getPane().paneIndex() : -1
 
     const hideTooltip = () => {
       if (!tooltipEl) return
@@ -269,13 +279,25 @@ export function StockChart({
         param.point === undefined ||
         param.time === undefined ||
         param.point.x < 0 ||
-        param.point.y < 0
+        param.point.y < 0 ||
+        param.paneIndex === undefined
       ) {
         hideTooltip()
         return
       }
 
-      const raw = param.seriesData.get(candle)
+      const onStock = param.paneIndex === stockPaneIndex
+      const onSpy = spySeries != null && param.paneIndex === spyPaneIndex
+      // Volume / RS (and any other non-candle pane): no tooltip.
+      if (!onStock && !onSpy) {
+        hideTooltip()
+        return
+      }
+
+      const series = onSpy && spySeries ? spySeries : candle
+      const lookup = onSpy ? spyByTime : barByTime
+      const title = onSpy ? "SPY" : null
+      const raw = param.seriesData.get(series)
       if (
         !raw ||
         !("open" in raw) ||
@@ -296,7 +318,7 @@ export function StockChart({
       const low = raw.low
       const close = raw.close
       const barTime = ("time" in raw && raw.time != null ? raw.time : param.time) as ChartTime
-      const keyed = barByTime.get(timeKey(barTime))
+      const keyed = lookup.get(timeKey(barTime))
       const prevClose = keyed?.prevClose ?? null
       const changePct =
         prevClose != null && prevClose > 0 ? ((close - prevClose) / prevClose) * 100 : null
@@ -313,8 +335,12 @@ export function StockChart({
         `<span${color ? ` style="color:${color}"` : ""}>${value}</span></div>`
 
       const timeLabel = formatTooltipTime(barTime, interval)
+      const header = title
+        ? `<div style="margin-bottom:2px;font-size:10px;letter-spacing:0.06em;color:#d9d2c5;font-weight:600">${title}</div>` +
+          `<div style="margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.1);font-size:10px;letter-spacing:0.04em;color:#a39e93">${timeLabel}</div>`
+        : `<div style="margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.1);font-size:10px;letter-spacing:0.04em;color:#a39e93">${timeLabel}</div>`
       tooltipEl.innerHTML =
-        `<div style="margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.1);font-size:10px;letter-spacing:0.04em;color:#a39e93">${timeLabel}</div>` +
+        header +
         row("開 Open", fmtPrice(open)) +
         row("高 High", fmtPrice(high)) +
         row("低 Low", fmtPrice(low)) +
