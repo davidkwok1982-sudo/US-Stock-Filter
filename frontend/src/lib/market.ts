@@ -44,7 +44,7 @@ export const MARKETS: Record<MarketId, MarketCopy> = {
     rsColumnTip: "近約5個交易日回報減 SPY",
     hardCapBlurb: "市值逾20億美元",
     strategyIntro:
-      "本站按以下七步篩選美股：先鎖定 Stage 2，再收緊市值與流動性、相對強度、領導板塊、升勢早期程度、近一星期升幅，以及是否靠近支持位。",
+      "本站按以下八步篩選美股：先鎖定 Stage 2，再收緊市值與流動性、相對強度、領導板塊、升勢早期程度、近一星期升幅、是否靠近支持位，最後複製研究提示詞做基本面核對。",
     scoreRsLabel: "一星期相對 SPY",
     sessionKey: "kailut-symbol",
   },
@@ -69,7 +69,7 @@ export const MARKETS: Record<MarketId, MarketCopy> = {
     rsColumnTip: "近約5個交易日回報減恆指",
     hardCapBlurb: "市值逾100億港元",
     strategyIntro:
-      "本站按以下七步篩選港股：先鎖定 Stage 2，再收緊市值與流動性、相對強度（對比恆指）、領導板塊、升勢早期程度、近一星期升幅，以及是否靠近支持位。",
+      "本站按以下八步篩選港股：先鎖定 Stage 2，再收緊市值與流動性、相對強度（對比恆指）、領導板塊、升勢早期程度、近一星期升幅、是否靠近支持位，最後複製研究提示詞做基本面核對。",
     scoreRsLabel: "一星期相對恆指",
     sessionKey: "kailut-hk-symbol",
   },

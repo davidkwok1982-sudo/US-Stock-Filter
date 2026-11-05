@@ -60,6 +60,10 @@ export function StrategyPage() {
         title: "價格剛好落在支持位",
         body: "可選開關「收市近支持」：最新收市落在結構支持區內。止蝕可放支持位下面，向上機率相對較高。支持區以日線結構估計（清晰擺動低點＋近約 20／60 日區間低點，並把 10／20／50／150／200 天線計入匯合；須至少兩次觸及才標出）。圖表只畫中軸虛線；篩選用中軸 ±0.5×ATR 區。優先取較接近中軸、且收市在中軸上方的支持。篩選與圖表共用同一套定義。",
       },
+      {
+        title: "複製研究提示詞，做基本面核對",
+        body: "名單篩出後，點進個股頁，複製「研究提示詞」（會代入該股票），用嚟快速核對：業務係咩、近期有咩變、業績／管理層口風、受惠邊個市場敘事。技術面過關只係入場候選；呢步用嚟排除唔明所以嘅標的，再決定跟唔跟。",
+      },
     ],
     [copy.benchmarkShort, copy.rsChip, copy.scoreRsLabel, market],
   )
@@ -78,7 +82,7 @@ export function StrategyPage() {
       </header>
 
       <section className="space-y-4 text-sm leading-relaxed">
-        <h2 className="font-heading text-2xl">篩選思路（七步）</h2>
+        <h2 className="font-heading text-2xl">篩選思路（八步）</h2>
         <ol className="space-y-4">
           {steps.map((step, index) => (
             <li key={step.title} className="rounded-lg border border-border bg-secondary/20 px-4 py-3">
