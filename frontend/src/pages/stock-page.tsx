@@ -179,7 +179,7 @@ export function StockPage() {
           <section className="relative overflow-hidden rounded-xl bg-chart text-white">
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-[#d9d2c5]">
               <p>
-                上方指數（SPY）陰陽燭 · 升紅跌綠 · {smaHint(chartInterval)} · 成交量 · 相對強度
+                上方指數（SPY）陰陽燭 · {smaHint(chartInterval)} · 成交量 · 相對強度
                 RS（同棒超額% vs SPY · 正＝跑贏 · 負＝落後 · 零軸）
                 {chartInterval === "1d" ? " · 虛線中軸為支持／阻力（結構＋均線匯合；篩選仍用 ±0.5×ATR 區）" : ""}
               </p>

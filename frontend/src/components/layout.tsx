@@ -50,8 +50,7 @@ export function Layout() {
         <div className="h-[3px] bg-up" />
       </header>
 
-      <div className="mx-auto flex max-w-6xl flex-wrap items-baseline justify-between gap-2 px-4 py-2 text-xs text-muted-foreground">
-        <p>升紅跌綠</p>
+      <div className="mx-auto flex max-w-6xl flex-wrap items-baseline justify-end gap-2 px-4 py-2 text-xs text-muted-foreground">
         <p>
           {marketDate ? `美東交易日 ${formatMarketDate(marketDate)}` : "等待行情"}
           {refreshed ? ` · 香港時間 ${formatHongKongTime(refreshed)} 更新` : ""}
