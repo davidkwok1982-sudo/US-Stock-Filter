@@ -118,11 +118,11 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
 
   return (
     <section
-      className="rounded-xl border border-border bg-card p-4 sm:p-5"
+      className="min-w-0 max-w-full overflow-x-hidden rounded-xl border border-border bg-card p-3 sm:p-5"
       aria-labelledby="industry-heatmap-title"
     >
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+      <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-xs tracking-[0.16em] text-muted-foreground">領導版塊</p>
           <h2 id="industry-heatmap-title" className="font-heading text-2xl font-semibold">
             細分版塊熱力圖
@@ -131,26 +131,26 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
             第二階段名單按細分版塊家數排名，只顯示頭十位。先看領導版塊，再在版塊內找評分／相對強度較高的股份。
           </p>
         </div>
-        <p className="text-sm text-muted-foreground">
+        <p className="shrink-0 text-sm text-muted-foreground">
           頭 {buckets.length} 個細分版塊 · 名單 {rows.length} 隻
         </p>
       </div>
 
       {/* Hero: #1 full-width, #2/#3 side-by-side */}
       {leaders[0] ? (
-        <div className="mt-5">
+        <div className="mt-5 min-w-0">
           <IndustryBlock
             bucket={leaders[0]}
             maxCount={maxCount}
             hero
             onOpen={(symbol) => openRow(navigate, symbol, copy.stockPath, copy.sessionKey)}
-          rsChip={copy.rsChip}
-              scoreRsLabel={copy.scoreRsLabel}
-            />
+            rsChip={copy.rsChip}
+            scoreRsLabel={copy.scoreRsLabel}
+          />
         </div>
       ) : null}
       {leaders.length > 1 ? (
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
           {leaders.slice(1).map((bucket) => (
             <IndustryBlock
               key={bucket.key}
@@ -158,7 +158,7 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
               maxCount={maxCount}
               hero
               onOpen={(symbol) => openRow(navigate, symbol, copy.stockPath, copy.sessionKey)}
-            rsChip={copy.rsChip}
+              rsChip={copy.rsChip}
               scoreRsLabel={copy.scoreRsLabel}
             />
           ))}
@@ -166,7 +166,7 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
       ) : null}
 
       {rest.length > 0 ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {rest.map((bucket) => (
             <IndustryBlock
               key={bucket.key}
@@ -174,14 +174,14 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
               maxCount={maxCount}
               hero={false}
               onOpen={(symbol) => openRow(navigate, symbol, copy.stockPath, copy.sessionKey)}
-            rsChip={copy.rsChip}
+              rsChip={copy.rsChip}
               scoreRsLabel={copy.scoreRsLabel}
             />
           ))}
         </div>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+      <div className="mt-4 flex min-w-0 flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <span className="size-2.5 rounded-sm" style={{ background: "rgba(157,44,36,0.55)" }} />
           家數較多（熱）
@@ -217,18 +217,18 @@ function IndustryBlock({
   return (
     <article
       className={cn(
-        "rounded-lg border p-3 transition-shadow",
+        "min-w-0 max-w-full overflow-hidden rounded-lg border p-3 transition-shadow",
         hero && bucket.rank === 1 && "shadow-md ring-1 ring-primary/25 lg:col-span-1",
         hero && "min-h-[11rem]",
       )}
       style={blockStyle(bucket.rank, bucket.count, maxCount)}
     >
-      <header className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+      <header className="flex min-w-0 items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
             <span
               className={cn(
-                "num inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-xs font-medium",
+                "num inline-flex shrink-0 items-center justify-center rounded-md px-1.5 py-0.5 text-xs font-medium",
                 bucket.rank === 1 && "bg-primary text-primary-foreground",
                 bucket.rank === 2 && "bg-brass text-primary-foreground",
                 bucket.rank === 3 && "bg-brass-soft text-ink",
@@ -239,7 +239,7 @@ function IndustryBlock({
             </span>
             <h3
               className={cn(
-                "truncate font-heading font-semibold",
+                "min-w-0 flex-1 truncate font-heading font-semibold",
                 isTop ? "text-lg sm:text-xl" : "text-base",
               )}
               title={bucket.label}
@@ -256,7 +256,9 @@ function IndustryBlock({
 
       <ul
         className={cn(
-          "mt-3 flex flex-wrap gap-1.5",
+          // 2-col grid on phones so tiles cannot inflate the block past the viewport;
+          // sm+ keeps the previous flex-wrap chip denseness.
+          "mt-3 grid min-w-0 grid-cols-2 gap-1.5 sm:flex sm:flex-wrap",
           hero && bucket.rank === 1 && "gap-2",
         )}
       >
@@ -264,37 +266,37 @@ function IndustryBlock({
           const board = boardLabel(row)
           const name = shortName(displayName(row))
           return (
-            <li key={row.symbol}>
+            <li key={row.symbol} className="min-w-0 max-w-full sm:max-w-none">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     type="button"
                     onClick={() => onOpen(row.symbol)}
                     className={cn(
-                      "rounded-md border px-2 py-1 text-left transition-colors hover:border-primary/50 hover:bg-card",
-                      hero && bucket.rank <= 2 ? "min-w-[5.25rem]" : "min-w-[4.5rem]",
+                      "box-border w-full max-w-full rounded-md border px-2 py-1 text-left transition-colors hover:border-primary/50 hover:bg-card sm:w-auto",
+                      hero && bucket.rank <= 2 ? "sm:min-w-[5.25rem]" : "sm:min-w-[4.5rem]",
                       tileShade(row.score, maxScore),
                     )}
                   >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className={cn("font-medium", hero ? "text-sm" : "text-xs")}>
+                    <div className="flex min-w-0 items-baseline justify-between gap-2">
+                      <span className={cn("min-w-0 truncate font-medium", hero ? "text-sm" : "text-xs")}>
                         {row.symbol}
                       </span>
-                      <span className="num text-[10px] text-muted-foreground" title="評分">
+                      <span className="num shrink-0 text-[10px] text-muted-foreground" title="評分">
                         {row.score}
                       </span>
                     </div>
                     {name ? (
-                      <span className="block max-w-[7.5rem] truncate text-[10px] text-muted-foreground">
+                      <span className="block w-full truncate text-[10px] text-muted-foreground">
                         {name}
                       </span>
                     ) : null}
-                    <span className="mt-0.5 block max-w-[7.5rem] truncate text-[10px] leading-tight text-brass">
+                    <span className="mt-0.5 block w-full truncate text-[10px] leading-tight text-brass">
                       {board}
                     </span>
                     <span
                       className={cn(
-                        "num mt-0.5 block text-[10px]",
+                        "num mt-0.5 block truncate text-[10px]",
                         toneClass(row.rs1w ?? row.rs6m),
                         row.rsBeat ? "font-medium" : "",
                       )}

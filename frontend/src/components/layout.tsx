@@ -97,7 +97,7 @@ export function Layout() {
         </p>
       </div>
 
-      <main className="mx-auto max-w-6xl px-4 pb-24">
+      <main className="mx-auto min-w-0 max-w-6xl overflow-x-hidden px-4 pb-24">
         <Outlet />
       </main>
 

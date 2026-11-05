@@ -91,7 +91,7 @@ export function ScreenPage() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       {!ready && !loadError && !coldHint ? (
         <LoadingState
           message={data?.refresh.message ?? "正在連線"}
