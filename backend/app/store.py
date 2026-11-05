@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import logging
 import threading
 import sqlite3
@@ -10,11 +11,12 @@ import zlib
 from datetime import datetime, timezone
 
 from app.config import CACHE_DIR, DB_PATH, TTL_HOURS
+from app.markets import HK_MARKET, US_MARKET, get_market
 
 log = logging.getLogger("kailut")
 
 _mem_lock = threading.Lock()
-_mem_snapshot: dict | None = None
+_mem_snapshots: dict[str, dict | None] = {"us": None, "hk": None}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS kv (
@@ -33,16 +35,26 @@ CREATE TABLE IF NOT EXISTS fundamentals (
 """
 
 
-def _connect() -> sqlite3.Connection:
+def _db_path(market: str = "us") -> Path:
+    if market == "hk":
+        return CACHE_DIR / HK_MARKET.db_name
+    if market == "us":
+        # Keep historical default path for the US cache.
+        return DB_PATH if US_MARKET.db_name == "market.sqlite" else CACHE_DIR / US_MARKET.db_name
+    cfg = get_market(market)
+    return CACHE_DIR / cfg.db_name
+
+
+def _connect(market: str = "us") -> sqlite3.Connection:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn = sqlite3.connect(_db_path(market), timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 
-def init_db() -> None:
-    with _connect() as conn:
+def init_db(market: str = "us") -> None:
+    with _connect(market) as conn:
         conn.executescript(SCHEMA)
 
 
@@ -79,102 +91,101 @@ def _unpack(blob: bytes) -> list[dict]:
 
 
 
-def _refresh_screen_cache(snapshot: dict) -> None:
+def _refresh_screen_cache(snapshot: dict, market: str = "us") -> None:
     """Rebuild in-memory pre-serialized /api/screen payloads after snapshot writes."""
     try:
-        from app.screen_cache import rebuild
-        from app.engine import engine
+        from app import screen_cache
+        from app.engine import engines
 
-        rebuild(snapshot, engine.status(), is_stale(snapshot))
+        eng = engines[market]
+        screen_cache.rebuild(snapshot, eng.status(), is_stale(snapshot), market=market)
     except Exception as exc:  # pragma: no cover - cache must never break persistence
-        log.warning("screen cache rebuild failed: %s", exc)
+        log.warning("screen cache rebuild failed (%s): %s", market, exc)
         try:
-            from app.screen_cache import invalidate
+            from app import screen_cache
 
-            invalidate()
+            screen_cache.invalidate(market=market)
         except Exception:
             pass
 
 
-def save_refresh(snapshot: dict, charts: dict[str, list[dict]]) -> None:
-    init_db()
+def save_refresh(snapshot: dict, charts: dict[str, list[dict]], market: str = "us") -> None:
+    init_db(market)
     encoded = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
     rows = [(symbol, _pack(bars)) for symbol, bars in charts.items()]
-    with _connect() as conn:
+    with _connect(market) as conn:
         conn.execute("BEGIN")
         conn.execute("DELETE FROM charts")
         conn.executemany("INSERT INTO charts (symbol, payload) VALUES (?, ?)", rows)
         conn.execute("INSERT OR REPLACE INTO kv (k, v) VALUES ('snapshot', ?)", (encoded,))
         conn.commit()
-    global _mem_snapshot
     with _mem_lock:
-        _mem_snapshot = snapshot
-    _refresh_screen_cache(snapshot)
+        _mem_snapshots[market] = snapshot
+    _refresh_screen_cache(snapshot, market)
 
 
-def save_snapshot(snapshot: dict) -> None:
+def save_snapshot(snapshot: dict, market: str = "us") -> None:
     """Overwrite the screen snapshot without touching cached charts."""
-    init_db()
+    init_db(market)
     encoded = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
-    with _connect() as conn:
+    with _connect(market) as conn:
         conn.execute("INSERT OR REPLACE INTO kv (k, v) VALUES ('snapshot', ?)", (encoded,))
         conn.commit()
-    global _mem_snapshot
     with _mem_lock:
-        _mem_snapshot = snapshot
-    _refresh_screen_cache(snapshot)
+        _mem_snapshots[market] = snapshot
+    _refresh_screen_cache(snapshot, market)
 
 
-def load_snapshot() -> dict | None:
-    global _mem_snapshot
+def load_snapshot(market: str = "us") -> dict | None:
     with _mem_lock:
-        if _mem_snapshot is not None:
-            return _mem_snapshot
-    init_db()
-    with _connect() as conn:
+        cached = _mem_snapshots.get(market)
+        if cached is not None:
+            return cached
+    init_db(market)
+    with _connect(market) as conn:
         row = conn.execute("SELECT v FROM kv WHERE k = 'snapshot'").fetchone()
     if row is None:
         return None
     snapshot = json.loads(row["v"])
     with _mem_lock:
-        _mem_snapshot = snapshot
+        _mem_snapshots[market] = snapshot
     return snapshot
 
 
-def load_chart(symbol: str) -> list[dict] | None:
-    init_db()
-    with _connect() as conn:
+def load_chart(symbol: str, market: str = "us") -> list[dict] | None:
+    init_db(market)
+    with _connect(market) as conn:
         row = conn.execute("SELECT payload FROM charts WHERE symbol = ?", (symbol,)).fetchone()
     if row is None:
         return None
     return _unpack(row["payload"])
 
 
-def save_chart(symbol: str, bars: list[dict]) -> None:
-    init_db()
-    with _connect() as conn:
+def save_chart(symbol: str, bars: list[dict], market: str = "us") -> None:
+    init_db(market)
+    with _connect(market) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO charts (symbol, payload) VALUES (?, ?)",
             (symbol, _pack(bars)),
         )
 
 
-def upsert_charts(charts: dict[str, list[dict]]) -> None:
+def upsert_charts(charts: dict[str, list[dict]], market: str = "us") -> None:
     """Insert or replace chart rows without wiping the rest of the cache."""
     if not charts:
         return
-    init_db()
+    init_db(market)
     rows = [(symbol, _pack(bars)) for symbol, bars in charts.items()]
-    with _connect() as conn:
+    with _connect(market) as conn:
         conn.execute("BEGIN")
         conn.executemany("INSERT OR REPLACE INTO charts (symbol, payload) VALUES (?, ?)", rows)
         conn.commit()
 
 
-def prune_charts(keep: set[str]) -> None:
-    """Drop cached charts whose symbols are no longer in the universe (+ SPY)."""
-    init_db()
-    with _connect() as conn:
+def prune_charts(keep: set[str], market: str = "us") -> None:
+    """Drop cached charts whose symbols are no longer in the universe (+ benchmark)."""
+    init_db(market)
+    with _connect(market) as conn:
         existing = [row[0] for row in conn.execute("SELECT symbol FROM charts").fetchall()]
         drop = [symbol for symbol in existing if symbol not in keep]
         if not drop:
@@ -184,9 +195,9 @@ def prune_charts(keep: set[str]) -> None:
         conn.commit()
 
 
-def load_fundamentals(symbol: str) -> dict | None:
-    init_db()
-    with _connect() as conn:
+def load_fundamentals(symbol: str, market: str = "us") -> dict | None:
+    init_db(market)
+    with _connect(market) as conn:
         row = conn.execute(
             "SELECT payload, updated_at FROM fundamentals WHERE symbol = ?",
             (symbol,),
@@ -198,10 +209,10 @@ def load_fundamentals(symbol: str) -> dict | None:
     return payload
 
 
-def save_fundamentals(symbol: str, payload: dict) -> None:
-    init_db()
+def save_fundamentals(symbol: str, payload: dict, market: str = "us") -> None:
+    init_db(market)
     stamp = datetime.now(timezone.utc).isoformat()
-    with _connect() as conn:
+    with _connect(market) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO fundamentals (symbol, payload, updated_at) VALUES (?, ?, ?)",
             (symbol, json.dumps(payload, ensure_ascii=False), stamp),

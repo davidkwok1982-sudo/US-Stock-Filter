@@ -84,3 +84,7 @@ cd ../frontend && npx tsc -b --noEmit
 ## 之後加策略
 
 `backend/app/strategies.py` 登記策略編號。`GET /api/screen?strategy=minervini`（內部策略 id）目前回 501。第二階段的計算在 `backend/app/evaluate.py` 與 `metrics.py`。新策略可以沿用同一套 Yahoo 快取，另寫一個 `evaluate`，再在前端策略分頁接上。
+
+## 港股
+
+同站另有港股篩選器：`/hk`（基準恆指、`POST /api/hk/refresh`）。詳見 `DEPLOY.md`。

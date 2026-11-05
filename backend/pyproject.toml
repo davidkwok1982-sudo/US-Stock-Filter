@@ -7,6 +7,7 @@ dependencies = [
   "fastapi[standard]",
   "uvicorn[standard]==0.54.0",
   "httpx==0.28.1",
+  "openpyxl==3.1.5",
 ]
 
 [project.optional-dependencies]

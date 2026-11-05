@@ -12,24 +12,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   formatPct,
   formatPrice,
-  formatUsdLabeled,
+  formatMoneyLabeled,
   toneClass,
 } from "@/lib/format.ts"
 import { industryLabel } from "@/lib/filters.ts"
+import { useScreen } from "@/lib/screen-context.tsx"
 import type { ScreenRow, SortKey } from "@/lib/types.ts"
-
-const COLUMNS: { key: SortKey; label: string; tip: string; align: "left" | "right" }[] = [
-  { key: "symbol", label: "代號", tip: "美股代號", align: "left" },
-  { key: "name", label: "名稱", tip: "公司名稱", align: "left" },
-  { key: "industry", label: "行業", tip: "行業分類（優先中文標籤）", align: "left" },
-  { key: "price", label: "現價", tip: "最近報價，美元", align: "right" },
-  { key: "changePct", label: "升跌", tip: "較上一個收市", align: "right" },
-  { key: "marketCap", label: "市值", tip: "美元市值", align: "right" },
-  { key: "dollarVolume", label: "日均成交額", tip: "近63日或三個月估算", align: "right" },
-  { key: "vsSma200", label: "對200天", tip: "現價相對200天線", align: "right" },
-  { key: "rs1w", label: "一星期RS", tip: "近約5個交易日回報減 SPY", align: "right" },
-  { key: "score", label: "評分", tip: "0至100，只用於排序", align: "right" },
-]
 
 export function ScreenTable({
   rows,
@@ -43,13 +31,26 @@ export function ScreenTable({
   onSort: (key: SortKey) => void
 }) {
   const navigate = useNavigate()
+  const { copy, market } = useScreen()
+  const columns = [
+    { key: "symbol" as const, label: "代號", tip: copy.symbolTip, align: "left" as const },
+    { key: "name" as const, label: "名稱", tip: "公司名稱", align: "left" as const },
+    { key: "industry" as const, label: "行業", tip: "行業分類（優先中文標籤）", align: "left" as const },
+    { key: "price" as const, label: "現價", tip: market === "hk" ? "最近報價，港元" : "最近報價，美元", align: "right" as const },
+    { key: "changePct" as const, label: "升跌", tip: "較上一個收市", align: "right" as const },
+    { key: "marketCap" as const, label: "市值", tip: market === "hk" ? "港元市值（Yahoo）" : "美元市值", align: "right" as const },
+    { key: "dollarVolume" as const, label: "日均成交額", tip: "近63日或三個月估算", align: "right" as const },
+    { key: "vsSma200" as const, label: "對200天", tip: "現價相對200天線", align: "right" as const },
+    { key: "rs1w" as const, label: "一星期RS", tip: copy.rsColumnTip, align: "right" as const },
+    { key: "score" as const, label: "評分", tip: "0至100，只用於排序", align: "right" as const },
+  ]
   return (
     <>
       <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              {COLUMNS.map((column) => (
+              {columns.map((column) => (
                 <TableHead key={column.key} className={column.align === "right" ? "text-right" : "text-left"}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -75,11 +76,11 @@ export function ScreenTable({
                 key={row.symbol}
                 className="cursor-pointer"
                 tabIndex={0}
-                onClick={() => openRow(navigate, row.symbol)}
+                onClick={() => openRow(navigate, row.symbol, copy.stockPath, copy.sessionKey)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault()
-                    openRow(navigate, row.symbol)
+                    openRow(navigate, row.symbol, copy.stockPath, copy.sessionKey)
                   }
                 }}
               >
@@ -90,8 +91,8 @@ export function ScreenTable({
                 </TableCell>
                 <TableCell className="num text-right">{formatPrice(row.price)}</TableCell>
                 <TableCell className={`num text-right ${toneClass(row.changePct)}`}>{formatPct(row.changePct, 2)}</TableCell>
-                <TableCell className="num text-right">{formatUsdLabeled(row.marketCap)}</TableCell>
-                <TableCell className="num text-right">{formatUsdLabeled(row.dollarVolume)}</TableCell>
+                <TableCell className="num text-right">{formatMoneyLabeled(row.marketCap, market === "hk" ? "HKD" : "USD")}</TableCell>
+                <TableCell className="num text-right">{formatMoneyLabeled(row.dollarVolume, market === "hk" ? "HKD" : "USD")}</TableCell>
                 <TableCell className={`num text-right ${toneClass(row.vsSma200)}`}>{formatPct(row.vsSma200)}</TableCell>
                 <TableCell className={`num text-right ${toneClass(row.rs1w ?? row.rs6m)}`}>{formatPct(row.rs1w ?? row.rs6m)}</TableCell>
                 <TableCell className="text-right">
@@ -108,7 +109,7 @@ export function ScreenTable({
           <li key={row.symbol}>
             <button
               type="button"
-              onClick={() => openRow(navigate, row.symbol)}
+              onClick={() => openRow(navigate, row.symbol, copy.stockPath, copy.sessionKey)}
               className="w-full rounded-lg border border-border bg-card p-3 text-left"
             >
               <div className="flex items-baseline justify-between gap-3">
@@ -129,11 +130,11 @@ export function ScreenTable({
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt>市值</dt>
-                  <dd className="num text-foreground">{formatUsdLabeled(row.marketCap)}</dd>
+                  <dd className="num text-foreground">{formatMoneyLabeled(row.marketCap, market === "hk" ? "HKD" : "USD")}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt>成交額</dt>
-                  <dd className="num text-foreground">{formatUsdLabeled(row.dollarVolume)}</dd>
+                  <dd className="num text-foreground">{formatMoneyLabeled(row.dollarVolume, market === "hk" ? "HKD" : "USD")}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt>對200天</dt>
@@ -165,7 +166,12 @@ function ScoreMark({ score }: { score: number }) {
   )
 }
 
-function openRow(navigate: ReturnType<typeof useNavigate>, symbol: string) {
-  sessionStorage.setItem("kailut-symbol", symbol)
-  void navigate(`/stock/${symbol}`)
+function openRow(
+  navigate: ReturnType<typeof useNavigate>,
+  symbol: string,
+  stockPath: (symbol: string) => string,
+  sessionKey: string,
+) {
+  sessionStorage.setItem(sessionKey, symbol)
+  void navigate(stockPath(symbol))
 }

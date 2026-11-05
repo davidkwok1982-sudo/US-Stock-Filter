@@ -190,6 +190,7 @@ def build_score(
     slope200: float | None,
     rs1w: float | None,
     dollar: float | None,
+    rs_label: str = "一星期相對 SPY",
 ) -> tuple[int, list[dict]]:
     parts = [
         {
@@ -218,7 +219,7 @@ def build_score(
         },
         {
             "key": "rs1w",
-            "label": "一星期相對 SPY",
+            "label": rs_label,
             "points": points_rs(rs1w),
             "max": SCORE_MAX["rs1w"],
         },

@@ -13,7 +13,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.engine import cooldown_block, engine
+from app.engine import cooldown_block, engine, engine_hk, engines
 from app import screen_cache, store
 from app.strategies import STRATEGIES, get_strategy
 
@@ -21,21 +21,32 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("kailut")
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    store.init_db()
-    snapshot = store.load_snapshot()
+def _boot_market(market: str) -> None:
+    store.init_db(market)
+    eng = engines[market]
+    snapshot = store.load_snapshot(market)
     if snapshot is None or store.is_stale(snapshot):
-        log.info("cache missing or stale; starting refresh")
-        engine.start()
-    elif engine._needs_industry_backfill(snapshot):
-        log.info("screen cache missing industry labels; starting backfill")
-        engine.start_industry_backfill()
+        # Hobby / ephemeral: do not auto-start a full multi-thousand-symbol
+        # refresh for HK on every cold boot — US keeps prior behaviour.
+        if market == "us":
+            log.info("US cache missing or stale; starting refresh")
+            eng.start()
+        else:
+            log.info("HK cache missing or stale; waiting for manual /api/hk/refresh")
+    elif eng._needs_industry_backfill(snapshot):
+        log.info("%s screen cache missing industry labels; starting backfill", market)
+        eng.start_industry_backfill()
     if snapshot is not None:
         try:
-            screen_cache.rebuild(snapshot, engine.status(), store.is_stale(snapshot))
+            screen_cache.rebuild(snapshot, eng.status(), store.is_stale(snapshot), market=market)
         except Exception as exc:
-            log.warning("startup screen cache rebuild failed: %s", exc)
+            log.warning("startup screen cache rebuild failed (%s): %s", market, exc)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    _boot_market("us")
+    _boot_market("hk")
     yield
 
 
@@ -53,7 +64,14 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "name": "階律"}
+    return {
+        "ok": True,
+        "name": "階律",
+        "markets": {
+            "us": {"ready": store.load_snapshot("us") is not None, "refresh": engine.status()},
+            "hk": {"ready": store.load_snapshot("hk") is not None, "refresh": engine_hk.status()},
+        },
+    }
 
 
 @app.get("/api/strategies")
@@ -76,9 +94,10 @@ def screen(
     refresh = engine.status()
     accept_encoding = request.headers.get("accept-encoding")
     # Hot path: warm pre-gzip cache → status() only (no SQLite / row scans).
-    cached_snap = screen_cache.get_cached_snapshot()
+    cached_snap = screen_cache.get_cached_snapshot(market="us")
     if cached_snap is not None and (
-        screen_cache.has_entry(include) or (include == "all" and screen_cache.has_entry("pass"))
+        screen_cache.has_entry(include, market="us")
+        or (include == "all" and screen_cache.has_entry("pass", market="us"))
     ):
         stale = store.is_stale(cached_snap)
         warm = screen_cache.try_warm_response(
@@ -86,6 +105,7 @@ def screen(
             refresh=refresh,
             stale=stale,
             accept_encoding=accept_encoding,
+            market="us",
         )
         if warm is not None:
             return warm
@@ -100,6 +120,7 @@ def screen(
         stale=stale,
         include=include,
         accept_encoding=accept_encoding,
+        market="us",
     )
 
 
@@ -133,6 +154,96 @@ def stock_profile(symbol: str):
 def stock(symbol: str, interval: str = Query(default="1d", description="Chart timeframe: 1d, 1wk, or 1h")):
     try:
         return engine.detail(symbol, interval=interval)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+
+def _hk_screen_response(request: Request, include: str):
+    refresh = engine_hk.status()
+    accept_encoding = request.headers.get("accept-encoding")
+    cached_snap = screen_cache.get_cached_snapshot(market="hk")
+    if cached_snap is not None and (
+        screen_cache.has_entry(include, market="hk")
+        or (include == "all" and screen_cache.has_entry("pass", market="hk"))
+    ):
+        stale = store.is_stale(cached_snap)
+        warm = screen_cache.try_warm_response(
+            include=include,
+            refresh=refresh,
+            stale=stale,
+            accept_encoding=accept_encoding,
+            market="hk",
+        )
+        if warm is not None:
+            return warm
+    snapshot = engine_hk.prepare_snapshot()
+    if snapshot is None:
+        return {
+            "ready": False,
+            "stale": False,
+            "meta": {
+                "market": "hk",
+                "hint": "港股快取尚未建立。Hobby 部署為臨時磁碟，請先按「重新整理」或呼叫 POST /api/hk/refresh。",
+            },
+            "rows": [],
+            "refresh": refresh,
+        }
+    stale = store.is_stale(snapshot)
+    return screen_cache.response(
+        snapshot=snapshot,
+        refresh=refresh,
+        stale=stale,
+        include=include,
+        accept_encoding=accept_encoding,
+        market="hk",
+    )
+
+
+@app.get("/api/hk/screen")
+def hk_screen(
+    request: Request,
+    strategy: str = "jlaw-stage2",
+    include: str = Query(default="pass", pattern="^(pass|all)$"),
+):
+    chosen = get_strategy(strategy)
+    if chosen is None:
+        raise HTTPException(status_code=404, detail="沒有這個策略")
+    if chosen["status"] != "active":
+        raise HTTPException(status_code=501, detail="此策略尚未推出")
+    return _hk_screen_response(request, include)
+
+
+@app.post("/api/hk/refresh")
+def hk_refresh(force: bool = Query(default=False)):
+    reason = cooldown_block(force, market="hk")
+    if reason and not engine_hk.status()["running"]:
+        return {"started": False, "reason": "cooldown", "message": reason, "refresh": engine_hk.status()}
+    started = engine_hk.start()
+    return {
+        "started": started,
+        "reason": "started" if started else "running",
+        "message": "已開始更新" if started else "更新進行中",
+        "refresh": engine_hk.status(),
+    }
+
+
+@app.get("/api/hk/stock/{symbol}/profile")
+def hk_stock_profile(symbol: str):
+    try:
+        return engine_hk.profile(symbol)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/hk/stock/{symbol}")
+def hk_stock(symbol: str, interval: str = Query(default="1d", description="Chart timeframe: 1d, 1wk, or 1h")):
+    try:
+        return engine_hk.detail(symbol, interval=interval)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except LookupError as exc:

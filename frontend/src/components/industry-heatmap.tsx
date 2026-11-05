@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatPct, toneClass } from "@/lib/format.ts"
+import { useScreen } from "@/lib/screen-context.tsx"
 import { cn } from "@/lib/utils.ts"
 import type { ScreenRow } from "@/lib/types.ts"
 
@@ -93,15 +94,21 @@ function tileShade(score: number, maxScore: number): string {
   return "bg-card/70 border-border/80"
 }
 
-function openRow(navigate: ReturnType<typeof useNavigate>, symbol: string) {
-  sessionStorage.setItem("kailut-symbol", symbol)
-  void navigate(`/stock/${symbol}`)
+function openRow(
+  navigate: ReturnType<typeof useNavigate>,
+  symbol: string,
+  stockPath: (symbol: string) => string,
+  sessionKey: string,
+) {
+  sessionStorage.setItem(sessionKey, symbol)
+  void navigate(stockPath(symbol))
 }
 
 export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
   const buckets = useMemo(() => groupByIndustry(rows).slice(0, 10), [rows])
   const maxCount = buckets[0]?.count ?? 0
   const navigate = useNavigate()
+  const { copy } = useScreen()
 
   if (rows.length === 0 || buckets.length === 0) return null
 
@@ -135,8 +142,10 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
             bucket={leaders[0]}
             maxCount={maxCount}
             hero
-            onOpen={(symbol) => openRow(navigate, symbol)}
-          />
+            onOpen={(symbol) => openRow(navigate, symbol, copy.stockPath, copy.sessionKey)}
+          rsChip={copy.rsChip}
+              scoreRsLabel={copy.scoreRsLabel}
+            />
         </div>
       ) : null}
       {leaders.length > 1 ? (
@@ -147,7 +156,9 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
               bucket={bucket}
               maxCount={maxCount}
               hero
-              onOpen={(symbol) => openRow(navigate, symbol)}
+              onOpen={(symbol) => openRow(navigate, symbol, copy.stockPath, copy.sessionKey)}
+            rsChip={copy.rsChip}
+              scoreRsLabel={copy.scoreRsLabel}
             />
           ))}
         </div>
@@ -161,7 +172,9 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
               bucket={bucket}
               maxCount={maxCount}
               hero={false}
-              onOpen={(symbol) => openRow(navigate, symbol)}
+              onOpen={(symbol) => openRow(navigate, symbol, copy.stockPath, copy.sessionKey)}
+            rsChip={copy.rsChip}
+              scoreRsLabel={copy.scoreRsLabel}
             />
           ))}
         </div>
@@ -187,11 +200,15 @@ function IndustryBlock({
   maxCount,
   hero,
   onOpen,
+  rsChip,
+  scoreRsLabel,
 }: {
   bucket: IndustryBucket
   maxCount: number
   hero: boolean
   onOpen: (symbol: string) => void
+  rsChip: string
+  scoreRsLabel: string
 }) {
   const maxScore = bucket.rows.reduce((m, r) => Math.max(m, r.score), 0)
   const isTop = bucket.rank <= 3
@@ -280,7 +297,7 @@ function IndustryBlock({
                         toneClass(row.rs1w ?? row.rs6m),
                         row.rsBeat ? "font-medium" : "",
                       )}
-                      title="一星期相對 SPY"
+                      title={scoreRsLabel}
                     >
                       RS {formatPct(row.rs1w ?? row.rs6m)}
                     </span>
@@ -293,7 +310,7 @@ function IndustryBlock({
                   </span>
                   <span>版塊：{board}</span>
                   <span className="text-background/80">評分 {row.score} · 一星期 RS {formatPct(row.rs1w ?? row.rs6m)}</span>
-                  {row.rsBeat && row.rsBeat20 ? <span className="text-background/80">跑贏 SPY</span> : null}
+                  {row.rsBeat && row.rsBeat20 ? <span className="text-background/80">{rsChip}</span> : null}
                 </TooltipContent>
               </Tooltip>
             </li>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 GROUP_LABELS = {
     "us": "美股",
+    "hk": "港股",
     "sp500": "標普500",
     "ndx": "納指100",
     "sp400": "標普中型400",

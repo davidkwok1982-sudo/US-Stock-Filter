@@ -43,6 +43,13 @@ def evaluate(
     bars: list[dict] | None,
     quote: dict | None,
     spy_bars: list[dict],
+    *,
+    min_market_cap: float | None = None,
+    micro_cap: float | None = None,
+    penny_price: float | None = None,
+    apply_otc_gate: bool = True,
+    cap_fail_label: str | None = None,
+    rs_label: str | None = None,
 ) -> dict:
     quote = quote or {}
     bars = bars or []
@@ -127,18 +134,21 @@ def evaluate(
     )
     if not slopes_ok:
         fail_codes.append("ma_slope")
+    cap_floor = MIN_MARKET_CAP if min_market_cap is None else min_market_cap
+    micro_floor = MICRO_CAP if micro_cap is None else micro_cap
+    penny_floor = PENNY_PRICE if penny_price is None else penny_price
     market_cap = quote.get("marketCap")
-    if market_cap is None or market_cap < MIN_MARKET_CAP:
+    if market_cap is None or market_cap < cap_floor:
         fail_codes.append("cap")
-    if otc:
+    if apply_otc_gate and otc:
         fail_codes.append("otc")
     if quote_type and quote_type != "EQUITY":
         fail_codes.append("type")
 
     micro = bool(
-        otc
-        or (market_cap is not None and market_cap < MICRO_CAP)
-        or (price is not None and price < PENNY_PRICE)
+        (apply_otc_gate and otc)
+        or (market_cap is not None and market_cap < micro_floor)
+        or (price is not None and price < penny_floor)
     )
     above50 = bool(price and sma50 and price > sma50)
     above200 = bool(price and sma200 and price > sma200)
@@ -153,6 +163,7 @@ def evaluate(
         slope200=slope200,
         rs1w=rs1w,
         dollar=dollar,
+        rs_label=rs_label or "一星期相對 SPY",
     )
     groups = list(base.get("groups") or [])
     name = quote.get("name") or base.get("name") or base.get("symbol")
@@ -221,7 +232,10 @@ def evaluate(
         "score": score,
         "scoreParts": parts,
         "passHard": not fail_codes,
-        "failReasons": [FAILS[code] for code in fail_codes],
+        "failReasons": [
+            (cap_fail_label if code == "cap" and cap_fail_label else FAILS[code])
+            for code in fail_codes
+        ],
         "failCodes": fail_codes,
         "microOrOtc": micro,
         "otc": otc,
@@ -236,12 +250,12 @@ def _round(value: float | None) -> float | None:
     return round(value, 4 if abs(value) < 1 else 2)
 
 
-def spy_snapshot(spy_bars: list[dict]) -> dict:
+def spy_snapshot(spy_bars: list[dict], *, symbol: str = "SPY") -> dict:
     closes = _closes(spy_bars)
     dates = [bar["time"] for bar in spy_bars]
     price = spy_bars[-1]["close"] if spy_bars else None
     return {
-        "symbol": "SPY",
+        "symbol": symbol,
         "price": _round(price),
         "marketDate": spy_bars[-1]["time"] if spy_bars else None,
         "ret1w": window_return(closes, dates, RS_DAYS_1W),
@@ -249,6 +263,10 @@ def spy_snapshot(spy_bars: list[dict]) -> dict:
         "ret3m": window_return(closes, dates, RS_DAYS_3M),
         "ret6m": window_return(closes, dates, RS_DAYS_6M),
     }
+
+
+def benchmark_snapshot(bars: list[dict], *, symbol: str) -> dict:
+    return spy_snapshot(bars, symbol=symbol)
 
 
 def summarize(rows: list[dict]) -> dict:

@@ -17,6 +17,15 @@ export function formatUsdLabeled(value: number | null | undefined): string {
   return text === "—" ? text : `US$${text}`
 }
 
+export function formatMoneyLabeled(
+  value: number | null | undefined,
+  currency: "USD" | "HKD" = "USD",
+): string {
+  const text = formatUsd(value)
+  if (text === "—") return text
+  return currency === "HKD" ? `HK$${text}` : `US$${text}`
+}
+
 export function formatPrice(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—"
   const digits = Math.abs(value) >= 1 ? 2 : 4

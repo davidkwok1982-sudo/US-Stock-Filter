@@ -2,13 +2,8 @@ import { NavLink, Outlet, useLocation } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import { formatHongKongTime, formatMarketDate } from "@/lib/format.ts"
+import { MARKETS, type MarketId } from "@/lib/market.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
-
-const LINKS = [
-  { to: "/", label: "篩選結果", end: true },
-  { to: "/stock", label: "個股詳情", end: false },
-  { to: "/strategy", label: "策略說明", end: true },
-]
 
 function navClass(active: boolean): string {
   return active
@@ -16,26 +11,53 @@ function navClass(active: boolean): string {
     : "text-foreground/80 hover:bg-secondary hover:text-foreground"
 }
 
+function marketTabClass(active: boolean): string {
+  return active
+    ? "bg-primary text-primary-foreground"
+    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+}
+
 export function Layout() {
-  const { data, refresh, refreshing } = useScreen()
+  const { data, refresh, refreshing, copy, market } = useScreen()
   const location = useLocation()
   const marketDate = data?.meta?.marketDate
   const refreshed = data?.meta?.refreshedAt
-  const stockTarget = stockLink(location.pathname)
+  const home = copy.basePath || "/"
+  const stockTarget = stockLink(location.pathname, market, copy.sessionKey)
+  const links = [
+    { to: home, label: "篩選結果", end: true },
+    { to: stockTarget, label: "個股詳情", end: false },
+    { to: `${copy.basePath}/strategy`, label: "策略說明", end: true },
+  ]
 
   return (
     <div className="min-h-svh bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-foreground bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
-          <NavLink to="/" className="min-w-0 shrink-0">
-            <span className="font-heading text-3xl leading-none font-semibold tracking-wide">美股篩選器</span>
-            <span className="mt-1 block text-[11px] tracking-[0.18em] text-muted-foreground">美股第二階段觀察台</span>
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+          <NavLink to={home} className="min-w-0 shrink-0">
+            <span className="font-heading text-3xl leading-none font-semibold tracking-wide">{copy.title}</span>
+            <span className="mt-1 block text-[11px] tracking-[0.18em] text-muted-foreground">{copy.subtitle}</span>
           </NavLink>
+          <div className="ml-2 flex shrink-0 overflow-hidden rounded-md border border-border" role="group" aria-label="市場">
+            {(["us", "hk"] as MarketId[]).map((id) => {
+              const m = MARKETS[id]
+              const active = market === id
+              return (
+                <NavLink
+                  key={id}
+                  to={m.basePath || "/"}
+                  className={`px-2.5 py-1 text-xs font-medium ${marketTabClass(active)}`}
+                >
+                  {id === "us" ? "美股" : "港股"}
+                </NavLink>
+              )
+            })}
+          </div>
           <nav className="ml-auto hidden items-center gap-1 md:flex" aria-label="主要">
-            {LINKS.map((link) => (
+            {links.map((link) => (
               <NavLink
                 key={link.label}
-                to={link.label === "個股詳情" ? stockTarget : link.to}
+                to={link.to}
                 end={link.end}
                 className={({ isActive }) => `rounded-md px-3 py-1.5 text-sm ${navClass(isActive)}`}
               >
@@ -52,7 +74,7 @@ export function Layout() {
 
       <div className="mx-auto flex max-w-6xl flex-wrap items-baseline justify-end gap-2 px-4 py-2 text-xs text-muted-foreground">
         <p>
-          {marketDate ? `美東交易日 ${formatMarketDate(marketDate)}` : "等待行情"}
+          {marketDate ? `${copy.marketDateLabel} ${formatMarketDate(marketDate)}` : "等待行情"}
           {refreshed ? ` · 香港時間 ${formatHongKongTime(refreshed)} 更新` : ""}
         </p>
       </div>
@@ -62,17 +84,17 @@ export function Layout() {
       </main>
 
       <footer className="mx-auto hidden max-w-6xl px-4 pb-10 text-xs leading-relaxed text-muted-foreground md:block">
-        資料來源：Nasdaq Trader 符號目錄 · Yahoo Finance 公開行情。
+        {copy.footerSource}
       </footer>
 
       <nav
         className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-foreground bg-background md:hidden"
         aria-label="主要"
       >
-        {LINKS.map((link) => (
+        {links.map((link) => (
           <NavLink
             key={link.label}
-            to={link.label === "個股詳情" ? stockTarget : link.to}
+            to={link.to}
             end={link.end}
             className={({ isActive }) => `px-2 py-3 text-center text-sm ${isActive ? "text-primary" : "text-muted-foreground"}`}
           >
@@ -84,8 +106,9 @@ export function Layout() {
   )
 }
 
-function stockLink(pathname: string): string {
-  if (pathname.startsWith("/stock/")) return pathname
-  const saved = sessionStorage.getItem("kailut-symbol")
-  return saved ? `/stock/${saved}` : "/stock"
+function stockLink(pathname: string, market: MarketId, sessionKey: string): string {
+  const prefix = market === "hk" ? "/hk/stock" : "/stock"
+  if (pathname.startsWith(`${prefix}/`)) return pathname
+  const saved = sessionStorage.getItem(sessionKey)
+  return saved ? `${prefix}/${saved}` : prefix
 }

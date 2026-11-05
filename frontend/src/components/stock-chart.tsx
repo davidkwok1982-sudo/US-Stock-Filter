@@ -57,6 +57,12 @@ export function StockChart({
     const first = candles[0]!.time
 
     const indexBars = indexCandles(index, first)
+    const indexShort =
+      index?.symbol === "^HSI"
+        ? "恆指"
+        : index?.symbol === "SPY"
+          ? "SPY"
+          : (index?.symbol || "指數").replace("^", "")
     // Align SPY from full stock history so early excess points are available.
     const indexAll = indexCandles(index, bars[0]?.time ?? first)
     const rsPoints = computeRsExcess(bars, indexAll.length > 0 ? indexAll : indexBars).filter((point) =>
@@ -251,7 +257,7 @@ export function StockChart({
     }
 
     // Discreet top-left pane titles (native LWC text watermarks; no tooltip impact).
-    labelPane(spyPane, "SPY")
+    labelPane(spyPane, indexShort)
     labelPane(stockPane, "股價")
     labelPane(volumePane, "成交量")
     labelPane(rsPane, "RS")
@@ -303,7 +309,7 @@ export function StockChart({
 
       const series = onSpy && spySeries ? spySeries : candle
       const lookup = onSpy ? spyByTime : barByTime
-      const title = onSpy ? "SPY" : null
+      const title = onSpy ? indexShort : null
       const raw = param.seriesData.get(series)
       if (
         !raw ||

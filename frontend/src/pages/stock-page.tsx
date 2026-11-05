@@ -12,7 +12,7 @@ import { fetchStock, fetchStockProfile } from "@/lib/api.ts"
 import {
   formatPct,
   formatPrice,
-  formatUsdLabeled,
+  formatMoneyLabeled,
   toneClass,
 } from "@/lib/format.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
@@ -32,6 +32,7 @@ function smaHint(interval: ChartInterval): string {
 
 export function StockPage() {
   const { symbol = "" } = useParams()
+  const { market, copy } = useScreen()
   const [detail, setDetail] = useState<StockDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -56,13 +57,13 @@ export function StockPage() {
       loadedSymbolRef.current = ""
     }
     setError(null)
-    fetchStock(cleaned, chartInterval)
+    fetchStock(cleaned, chartInterval, market)
       .then((next) => {
         if (stop) return
         loadedSymbolRef.current = next.row.symbol
         setDetail(next)
-        sessionStorage.setItem("kailut-symbol", next.row.symbol)
-        document.title = `美股篩選器 · ${next.row.symbol}`
+        sessionStorage.setItem(copy.sessionKey, next.row.symbol)
+        document.title = `${copy.title} · ${next.row.symbol}`
       })
       .catch((reason: unknown) => {
         if (!stop) setError(reason instanceof Error ? reason.message : "未能載入這隻股份")
@@ -76,7 +77,7 @@ export function StockPage() {
     return () => {
       stop = true
     }
-  }, [symbol, chartInterval])
+  }, [symbol, chartInterval, market, copy.sessionKey, copy.title])
 
   useEffect(() => {
     const cleaned = symbol.trim().toUpperCase()
@@ -84,7 +85,7 @@ export function StockPage() {
     if (!detail.profilePending) return
     let stop = false
     setProfileLoading(true)
-    fetchStockProfile(cleaned)
+    fetchStockProfile(cleaned, market)
       .then((extra) => {
         if (stop) return
         setDetail((current) => {
@@ -117,7 +118,7 @@ export function StockPage() {
     return () => {
       stop = true
     }
-  }, [symbol, detail?.row.symbol, detail?.profilePending])
+  }, [symbol, detail?.row.symbol, detail?.profilePending, market])
 
   function selectInterval(next: ChartInterval) {
     setChartInterval(next)
@@ -131,7 +132,7 @@ export function StockPage() {
   return (
     <div className="space-y-5">
       <Button asChild variant="ghost" size="sm" className="-ml-2">
-        <Link to="/">返回篩選</Link>
+        <Link to={copy.basePath || "/"}>返回篩選</Link>
       </Button>
 
       {error && !detail ? (
@@ -139,7 +140,7 @@ export function StockPage() {
           <p className="font-heading text-2xl">未能打開這隻股份</p>
           <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           <Button asChild className="mt-4" variant="outline">
-            <Link to="/stock">改看其他代號</Link>
+            <Link to={market === "hk" ? "/hk/stock" : "/stock"}>改看其他代號</Link>
           </Button>
         </div>
       ) : null}
@@ -179,8 +180,8 @@ export function StockPage() {
           <section className="relative overflow-hidden rounded-xl bg-chart text-white">
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-[#d9d2c5]">
               <p>
-                上方指數（SPY）陰陽燭 · {smaHint(chartInterval)} · 成交量 · 相對強度
-                RS（同棒超額% vs SPY · 正＝跑贏 · 負＝落後 · 零軸）
+                上方指數（{copy.benchmarkShort}）陰陽燭 · {smaHint(chartInterval)} · 成交量 · 相對強度
+                RS（同棒超額% vs {copy.benchmarkShort} · 正＝跑贏 · 負＝落後 · 零軸）
                 {chartInterval === "1d" ? " · 虛線中軸為支持／阻力（結構＋均線匯合；篩選仍用 ±0.5×ATR 區）" : ""}
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -250,19 +251,19 @@ export function StockPage() {
               <p className="text-sm text-muted-foreground">近期未見足夠觸及（≥2）的結構高低位，未能標出可靠的支持或阻力。</p>
             )
           ) : (
-            <p className="text-sm text-muted-foreground">支持／阻力僅在日線顯示；週線與小時圖顯示陰陽燭、均線、成交量與相對強度 RS（同棒超額%＝該棒股票回報減 SPY 回報 · 正＝跑贏 · 負＝落後）。資料點太少時會隱藏 RS 窗格。</p>
+            <p className="text-sm text-muted-foreground">支持／阻力僅在日線顯示；週線與小時圖顯示陰陽燭、均線、成交量與相對強度 RS（同棒超額%＝該棒股票回報減 {copy.benchmarkShort} 回報 · 正＝跑贏 · 負＝落後）。資料點太少時會隱藏 RS 窗格。</p>
           )}
 
           <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-            <Fact label="市值" value={formatUsdLabeled(row.marketCap)} />
-            <Fact label="日均成交額" value={formatUsdLabeled(row.dollarVolume)} />
+            <Fact label="市值" value={formatMoneyLabeled(row.marketCap, market === "hk" ? "HKD" : "USD")} />
+            <Fact label="日均成交額" value={formatMoneyLabeled(row.dollarVolume, market === "hk" ? "HKD" : "USD")} />
             <Fact label="對200天" value={formatPct(row.vsSma200)} className={toneClass(row.vsSma200)} />
           </dl>
 
           <ul className="flex flex-wrap gap-2 text-sm">
             <Gate label="價＞50＞150＞200" ok={!row.failCodes.includes("ma_stack") && (row.maStacked ?? row.aboveSma200)} />
             <Gate label="均線向上" ok={!row.failCodes.includes("ma_slope") && row.slopeUp} />
-            <Gate label="市值逾20億" ok={!row.failCodes.includes("cap")} />
+            <Gate label={copy.hardCapBlurb.replace("市值逾", "市值逾")} ok={!row.failCodes.includes("cap")} />
           </ul>
           {row.failReasons.length > 0 ? (
             <p className="text-sm text-muted-foreground">未過：{row.failReasons.join("、")}</p>
@@ -360,7 +361,7 @@ export function StockPage() {
 }
 
 export function StockPicker() {
-  const { data } = useScreen()
+  const { data, copy, market } = useScreen()
   const [query, setQuery] = useState("")
   const rows = (data?.rows ?? []).filter((row) => row.passHard)
   const q = query.trim().toLowerCase()
@@ -369,27 +370,27 @@ export function StockPicker() {
     .slice(0, 12)
 
   useEffect(() => {
-    document.title = "美股篩選器 · 個股詳情"
-  }, [])
+    document.title = `${copy.title} · 個股詳情`
+  }, [copy.title])
 
   return (
     <div className="mx-auto max-w-lg py-8">
       <h1 className="font-heading text-3xl font-semibold">個股詳情</h1>
-      <p className="mt-2 text-sm text-muted-foreground">從篩選結果選一隻股份，或輸入代號。圖表上方為 SPY 指數陰陽燭，中間為股價與10／20／50／150／200天線，下方為成交量，並標出結構支持／阻力中軸（擺動＋近20／60日高低、均線匯合、≥2次觸及；篩選用 ±0.5×ATR 區）。</p>
+      <p className="mt-2 text-sm text-muted-foreground">從篩選結果選一隻股份，或輸入代號。圖表上方為 {copy.benchmarkShort} 指數陰陽燭，中間為股價與10／20／50／150／200天線，下方為成交量，並標出結構支持／阻力中軸（擺動＋近20／60日高低、均線匯合、≥2次觸及；篩選用 ±0.5×ATR 區）。</p>
       <Input
         className="mt-5"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="例如 NVDA、Apple"
+        placeholder={market === "hk" ? "例如 0700.HK、騰訊" : "例如 NVDA、Apple"}
         aria-label="搜尋股份"
       />
       <ul className="mt-4 divide-y divide-border border-y border-border">
         {matches.map((row) => (
           <li key={row.symbol}>
             <Link
-              to={`/stock/${row.symbol}`}
+              to={copy.stockPath(row.symbol)}
               className="flex items-baseline justify-between gap-3 py-3"
-              onClick={() => sessionStorage.setItem("kailut-symbol", row.symbol)}
+              onClick={() => sessionStorage.setItem(copy.sessionKey, row.symbol)}
             >
               <span>
                 <span className="font-medium">{row.symbol}</span>

@@ -21,26 +21,38 @@ _GZIP_LEVEL = 1
 _SLIM_DROP = ("scoreParts", "beta", "betaBasis")
 
 _lock = threading.Lock()
-# include -> {"raw": bytes, "gzip": bytes, "refresh": dict, "stale": bool}
-_entries: dict[str, dict[str, Any]] = {}
+# market -> include -> {"raw": bytes, "gzip": bytes, "refresh": dict, "stale": bool}
+_entries_by_market: dict[str, dict[str, dict[str, Any]]] = {}
 
 
-def invalidate() -> None:
+def _bucket(market: str = "us") -> dict[str, dict[str, Any]]:
+    bucket = _entries_by_market.get(market)
+    if bucket is None:
+        bucket = {}
+        _entries_by_market[market] = bucket
+    return bucket
+
+
+def invalidate(market: str | None = None) -> None:
     with _lock:
-        _entries.clear()
+        if market is None:
+            _entries_by_market.clear()
+        else:
+            _entries_by_market.pop(market, None)
 
 
-def has_entry(include: str = "pass") -> bool:
+def has_entry(include: str = "pass", market: str = "us") -> bool:
     key = "all" if include == "all" else "pass"
     with _lock:
-        return key in _entries
+        return key in _bucket(market)
 
 
-def get_cached_snapshot() -> dict | None:
+def get_cached_snapshot(market: str = "us") -> dict | None:
     """Return the in-process snapshot held by a warm cache entry, if any."""
     with _lock:
+        bucket = _bucket(market)
         for key in ("pass", "all"):
-            entry = _entries.get(key)
+            entry = bucket.get(key)
             if entry is not None and entry.get("snapshot") is not None:
                 return entry["snapshot"]
     return None
@@ -52,6 +64,7 @@ def try_warm_response(
     refresh: dict,
     stale: bool,
     accept_encoding: str | None = None,
+    market: str = "us",
 ) -> Response | None:
     """Serve prebuilt bytes when cache is warm — no SQLite / prepare_snapshot.
 
@@ -60,22 +73,23 @@ def try_warm_response(
     """
     key = "all" if include == "all" else "pass"
     with _lock:
-        entry = _entries.get(key)
+        bucket = _bucket(market)
+        entry = bucket.get(key)
         snap = None
         if entry is not None:
             snap = entry.get("snapshot")
         if snap is None:
-            pass_entry = _entries.get("pass")
+            pass_entry = bucket.get("pass")
             if pass_entry is not None:
                 snap = pass_entry.get("snapshot")
     if snap is None and entry is None:
         return None
     if entry is None and key == "all" and snap is not None:
-        entry = _rebuild_all(snap, refresh, stale)
+        entry = _rebuild_all(snap, refresh, stale, market=market)
     if entry is None and key == "pass" and snap is not None:
-        rebuild(snap, refresh, stale)
+        rebuild(snap, refresh, stale, market=market)
         with _lock:
-            entry = _entries.get("pass")
+            entry = _bucket(market).get("pass")
     if entry is None:
         return None
     with _lock:
@@ -118,15 +132,16 @@ def _encode(payload: dict) -> tuple[bytes, bytes]:
     return raw, compressed
 
 
-def rebuild(snapshot: dict | None, refresh: dict, stale: bool) -> None:
+def rebuild(snapshot: dict | None, refresh: dict, stale: bool, market: str = "us") -> None:
     """Rebuild default (passHard) wire cache; drop include=all until requested."""
     if snapshot is None:
-        invalidate()
+        invalidate(market=market)
         return
     pass_payload = _build_payload(snapshot, include_all=False, refresh=refresh, stale=stale)
     pass_raw, pass_gz = _encode(pass_payload)
     with _lock:
-        _entries["pass"] = {
+        bucket = _bucket(market)
+        bucket["pass"] = {
             "raw": pass_raw,
             "gzip": pass_gz,
             "refresh": dict(refresh),
@@ -134,7 +149,7 @@ def rebuild(snapshot: dict | None, refresh: dict, stale: bool) -> None:
             "snapshot": snapshot,
         }
         # Full-universe bytes are large; rebuild lazily on ?include=all.
-        _entries.pop("all", None)
+        bucket.pop("all", None)
     log.info(
         "screen cache rebuilt pass_rows=%s pass_gzip=%sB",
         len(pass_payload["rows"]),
@@ -142,7 +157,7 @@ def rebuild(snapshot: dict | None, refresh: dict, stale: bool) -> None:
     )
 
 
-def _rebuild_all(snapshot: dict, refresh: dict, stale: bool) -> dict[str, object]:
+def _rebuild_all(snapshot: dict, refresh: dict, stale: bool, market: str = "us") -> dict[str, object]:
     all_payload = _build_payload(snapshot, include_all=True, refresh=refresh, stale=stale)
     all_raw, all_gz = _encode(all_payload)
     entry = {
@@ -153,24 +168,24 @@ def _rebuild_all(snapshot: dict, refresh: dict, stale: bool) -> dict[str, object
         "snapshot": snapshot,
     }
     with _lock:
-        _entries["all"] = entry
+        _bucket(market)["all"] = entry
     log.info("screen cache rebuilt all_rows=%s all_gzip=%sB", len(all_payload["rows"]), len(all_gz))
     return entry
 
 
-def _ensure(snapshot: dict | None, refresh: dict, stale: bool, include: str) -> dict[str, Any] | None:
+def _ensure(snapshot: dict | None, refresh: dict, stale: bool, include: str, market: str = "us") -> dict[str, Any] | None:
     key = "all" if include == "all" else "pass"
     with _lock:
-        entry = _entries.get(key)
+        entry = _bucket(market).get(key)
     if entry is not None:
         return entry
     if snapshot is None:
         return None
     if key == "pass":
-        rebuild(snapshot, refresh, stale)
+        rebuild(snapshot, refresh, stale, market=market)
         with _lock:
-            return _entries.get("pass")
-    return _rebuild_all(snapshot, refresh, stale)
+            return _bucket(market).get("pass")
+    return _rebuild_all(snapshot, refresh, stale, market=market)
 
 
 def _with_live_fields(entry: dict[str, Any], refresh: dict, stale: bool) -> tuple[bytes, bytes]:
@@ -196,6 +211,7 @@ def response(
     stale: bool,
     include: str = "pass",
     accept_encoding: str | None = None,
+    market: str = "us",
 ) -> Response:
     """Return a Response for /api/screen, serving pre-gzipped bytes when possible."""
     if snapshot is None:
@@ -209,7 +225,7 @@ def response(
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         return Response(content=raw, media_type="application/json")
 
-    entry = _ensure(snapshot, refresh, stale, include)
+    entry = _ensure(snapshot, refresh, stale, include, market=market)
     if entry is None:
         # Should not happen; fall back to building once.
         payload = _build_payload(snapshot, include_all=(include == "all"), refresh=refresh, stale=stale)

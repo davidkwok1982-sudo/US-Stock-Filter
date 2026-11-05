@@ -11,18 +11,13 @@ import { formatPct } from "@/lib/format.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
 import type { Filters, SortKey } from "@/lib/types.ts"
 
-const TOGGLES: { key: "rs" | "support"; label: string; hint: string }[] = [
-  { key: "rs", label: "跑贏 SPY", hint: "近約 5 個與 20 個交易日收市對收市總回報均高於 SPY（相對強度皆為正）" },
-  { key: "support", label: "收市近支持", hint: "最新收市價落在結構支持區內（清晰擺動低點＋近20／60日區間低點，須≥2次觸及；區間為中軸±0.5×ATR）。與圖表支持位同一套定義" },
-]
-
 const DEFAULT_GAIN1W = 5
 
 export function ScreenPage() {
-  const { data, loadError, refresh } = useScreen()
+  const { data, loadError, refresh, copy, market, refreshing } = useScreen()
   useEffect(() => {
-    document.title = "美股篩選器 · 篩選結果"
-  }, [])
+    document.title = `${copy.title} · 篩選結果`
+  }, [copy.title])
   const [params, setParams] = useSearchParams()
   const filters = useMemo(() => readFilters(params), [params])
 
@@ -39,7 +34,6 @@ export function ScreenPage() {
   const gainInput = gainDraft ?? (gainActive ? String(filters.gain1w) : "")
 
   useEffect(() => {
-    // Sync draft when URL/filter changes from outside (e.g. clear / toggle off).
     if (filters.gain1w == null) setGainDraft(null)
   }, [filters.gain1w])
 
@@ -78,17 +72,43 @@ export function ScreenPage() {
     update({ ...filters, sort: key, dir: key === "symbol" || key === "name" ? "asc" : "desc" })
   }
 
-  const ready = Boolean(data?.ready && data.meta)
+  const ready = Boolean(data?.ready && data.meta?.universe && data.meta?.summary)
+  const coldHint = !ready && !refreshing && Boolean(data && !data.refresh.running)
   const rows = useMemo(() => (data?.rows ? visibleRows(data.rows, filters) : []), [data, filters])
-  const passCount = data?.meta?.summary.pass ?? 0
+  const passCount = data?.meta?.summary?.pass ?? 0
   const leaders = useMemo(() => {
     if (!data?.rows) return []
     return data.rows.filter((row) => row.passHard).slice(0, 5)
   }, [data])
 
+  const toggles: { key: "rs" | "support"; label: string; hint: string }[] = [
+    { key: "rs", label: copy.rsChip, hint: copy.rsHint },
+    {
+      key: "support",
+      label: "收市近支持",
+      hint: "最新收市價落在結構支持區內（清晰擺動低點＋近20／60日區間低點，須≥2次觸及；區間為中軸±0.5×ATR）。與圖表支持位同一套定義",
+    },
+  ]
+
   return (
     <div className="space-y-6">
-      {!ready && !loadError ? <LoadingState message={data?.refresh.message ?? "正在連線"} progress={data?.refresh.progress ?? 4} /> : null}
+      {!ready && !loadError && !coldHint ? (
+        <LoadingState
+          message={data?.refresh.message ?? "正在連線"}
+          progress={data?.refresh.progress ?? 4}
+          market={market}
+        />
+      ) : null}
+      {coldHint ? (
+        <ColdStartState
+          title={copy.title}
+          hint={data?.meta?.hint ?? (market === "hk"
+            ? "港股快取尚未建立。Hobby 部署為臨時磁碟，請先按「重新整理」建立股票池。"
+            : "尚未有快取，請重新整理。")}
+          onRefresh={() => void refresh()}
+          refreshing={refreshing}
+        />
+      ) : null}
       {loadError && !ready ? (
         <ErrorState message={loadError} onRetry={() => void refresh()} />
       ) : null}
@@ -101,7 +121,7 @@ export function ScreenPage() {
         </p>
       ) : null}
 
-      {ready && data?.meta ? (
+      {ready && data?.meta?.universe && data.meta.summary ? (
         <>
           <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
             <div>
@@ -112,12 +132,8 @@ export function ScreenPage() {
               </p>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              股票池為全美上市普通股（已剔除 ADR 與 ETF），目前 {data.meta.universe.unique} 隻
-              {data.meta.universe.evaluated != null && data.meta.universe.evaluated !== data.meta.universe.unique
-                ? `（已評估 ${data.meta.universe.evaluated}）`
-                : ""}
-              。
-              SPY 近一星期 {formatPct(data.meta.spy.ret1w ?? data.meta.spy.ret6m)}。
+              {copy.universeBlurb(data.meta.universe.unique, data.meta.universe.evaluated)}
+              {copy.benchmarkShort} 近一星期 {formatPct(data.meta.spy?.ret1w ?? data.meta.spy?.ret6m ?? null)}。
             </p>
             <dl className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
               <Stat label="未符合股價＞50＞150＞200" value={data.meta.summary.failMaStack ?? data.meta.summary.failSma200} />
@@ -132,7 +148,10 @@ export function ScreenPage() {
               <span className="text-xs text-muted-foreground">評分較高</span>
               {leaders.map((row) => (
                 <Button key={row.symbol} asChild variant="outline" size="sm">
-                  <Link to={`/stock/${row.symbol}`} onClick={() => sessionStorage.setItem("kailut-symbol", row.symbol)}>
+                  <Link
+                    to={copy.stockPath(row.symbol)}
+                    onClick={() => sessionStorage.setItem(copy.sessionKey, row.symbol)}
+                  >
                     {row.symbol}
                     <span className="num text-muted-foreground">{row.score}</span>
                   </Link>
@@ -153,7 +172,7 @@ export function ScreenPage() {
               <p className="text-sm text-muted-foreground">顯示 {rows.length} 隻 · 通過家數 {passCount}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {TOGGLES.map((item) => {
+              {toggles.map((item) => {
                 const on = Boolean(filters[item.key])
                 return (
                   <Button
@@ -173,7 +192,7 @@ export function ScreenPage() {
                 className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 ${
                   filters.gain1w != null ? "border-transparent bg-primary text-primary-foreground" : "border-border bg-background"
                 }`}
-                title="近約 5 個交易日（一星期）收市對收市升幅；只計股份本身，唔係相對 SPY。可輸入門檻百分比。"
+                title={`近約 5 個交易日（一星期）收市對收市升幅；只計股份本身，唔係相對 ${copy.benchmarkShort}。可輸入門檻百分比。`}
               >
                 <Button
                   type="button"
@@ -207,8 +226,8 @@ export function ScreenPage() {
             <details className="text-sm text-muted-foreground">
               <summary className="cursor-pointer text-foreground">怎樣讀這張表</summary>
               <p className="mt-2 max-w-3xl leading-relaxed">
-                預設只列出通過篩選的股份：現價＞50天線＞150天線＞200天線、三條均線過去約一星期都向上、市值逾20億美元。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「跑贏 SPY」須近約 5 個與 20 個交易日收市對收市總回報減 SPY 皆為正。「收市近支持」以結構支持區（擺動＋近20／60日低點、≥2次觸及、±0.5×ATR）判斷；最新收市須落在該區內。「近一星期升幅」要求股份本身近約 5 個交易日收市對收市升幅達到你輸入的門檻（預設 5%），唔係相對 SPY。
-                <Link to="/strategy" className="ml-2 text-foreground underline underline-offset-4">
+                預設只列出通過篩選的股份：現價＞50天線＞150天線＞200天線、三條均線過去約一星期都向上、{copy.hardCapBlurb}。評分把距離均線、斜率、近一星期相對 {copy.benchmarkShort} 和流動性加總，方便排序。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「{copy.rsChip}」須近約 5 個與 20 個交易日收市對收市總回報減 {copy.benchmarkShort} 皆為正。「收市近支持」以結構支持區（擺動＋近20／60日低點、≥2次觸及、±0.5×ATR）判斷；最新收市須落在該區內。「近一星期升幅」要求股份本身近約 5 個交易日收市對收市升幅達到你輸入的門檻（預設 5%），唔係相對 {copy.benchmarkShort}。
+                <Link to={`${copy.basePath}/strategy`} className="ml-2 text-foreground underline underline-offset-4">
                   策略說明
                 </Link>
               </p>
@@ -256,7 +275,7 @@ function Stat({ label, value }: { label: string; value: number }) {
   )
 }
 
-function LoadingState({ message, progress }: { message: string; progress: number }) {
+function LoadingState({ message, progress, market }: { message: string; progress: number; market: string }) {
   return (
     <div className="mx-auto max-w-lg py-16 text-center" aria-live="polite">
       <p className="font-heading text-2xl">正在整理第二階段名單</p>
@@ -271,8 +290,32 @@ function LoadingState({ message, progress }: { message: string; progress: number
         <Skeleton className="h-8 w-4/5" />
       </div>
       <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
-        首次會按批次向 Yahoo Finance 下載全美普通股日線（已剔除 ADR／ETF），需時較長，並寫入本機快取；更新中可先看已完成部分。
+        {market === "hk"
+          ? "首次會按批次向 Yahoo Finance 下載港交所普通股日線，並以恆生指數作相對強度基準；需時較長，並寫入本機快取。"
+          : "首次會按批次向 Yahoo Finance 下載全美普通股日線（已剔除 ADR／ETF），需時較長，並寫入本機快取；更新中可先看已完成部分。"}
       </p>
+    </div>
+  )
+}
+
+function ColdStartState({
+  title,
+  hint,
+  onRefresh,
+  refreshing,
+}: {
+  title: string
+  hint: string
+  onRefresh: () => void
+  refreshing: boolean
+}) {
+  return (
+    <div className="mx-auto max-w-lg py-16 text-center">
+      <p className="font-heading text-2xl">{title}</p>
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{hint}</p>
+      <Button type="button" className="mt-6" onClick={onRefresh} disabled={refreshing}>
+        {refreshing ? "更新中…" : "重新整理股票池"}
+      </Button>
     </div>
   )
 }

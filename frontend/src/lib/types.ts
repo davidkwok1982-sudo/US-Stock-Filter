@@ -85,11 +85,11 @@ export type UniverseCounts = {
 }
 
 export type ScreenMeta = {
-  refreshedAt: string
-  marketDate: string
-  universeSource: string
-  universe: UniverseCounts
-  summary: {
+  refreshedAt?: string
+  marketDate?: string
+  universeSource?: string
+  universe?: UniverseCounts
+  summary?: {
     universe: number
     pass: number
     incomplete: number
@@ -103,7 +103,10 @@ export type ScreenMeta = {
     failType: number
     microOrOtc: number
   }
-  spy: {
+  market?: string
+  hint?: string
+  benchmark?: { symbol: string; label: string }
+  spy?: {
     symbol: string
     price: number | null
     marketDate: string | null
@@ -112,13 +115,13 @@ export type ScreenMeta = {
     ret3m: number | null
     ret6m: number | null
   }
-  source: string
+  source?: string
   betaMethod?: string
-  dollarVolumeMethod: string
-  adjustment: string
-  ttlHours: number
-  chartFailures: number
-  criteria: Record<string, number>
+  dollarVolumeMethod?: string
+  adjustment?: string
+  ttlHours?: number
+  chartFailures?: number
+  criteria?: Record<string, number>
 }
 
 export type ScreenResponse = {

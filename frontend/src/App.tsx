@@ -13,6 +13,10 @@ export default function App() {
         <Route path="stock" element={<StockPicker />} />
         <Route path="stock/:symbol" element={<StockPage />} />
         <Route path="strategy" element={<StrategyPage />} />
+        <Route path="hk" element={<ScreenPage />} />
+        <Route path="hk/stock" element={<StockPicker />} />
+        <Route path="hk/stock/:symbol" element={<StockPage />} />
+        <Route path="hk/strategy" element={<StrategyPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -13,20 +13,25 @@ from app.close_at_support import RULE_VERSION, detect_close_at_support
 from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
 from app.levels import find_levels, merge_flagged_support
+from app.markets import HK_MARKET, US_MARKET, MarketConfig
 from app.metrics import SCORE_RULE_VERSION, SMA_FAST, SMA_MID, SMA_SHORT, SMA_SLOW, SMA_ULTRA, rolling_sma
 from app.notes import build_notes
 from app import store
-from app.universe import load_universe
+from app.universe import load_universe as load_universe_us
+from app.universe_hk import load_universe as load_universe_hk
 from app.yahoo import get_client, normalize_interval
 
 log = logging.getLogger("kailut")
 
-SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9\-]{0,9}$")
+US_SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9\-]{0,9}$")
+HK_SYMBOL_RE = re.compile(r"^\d{4}\.HK$")
+SYMBOL_RE = US_SYMBOL_RE  # backward-compatible alias
 FUNDAMENTAL_TTL = timedelta(days=7)
 
 
 class Engine:
-    def __init__(self) -> None:
+    def __init__(self, market: MarketConfig | None = None) -> None:
+        self.market = market or US_MARKET
         self._lock = threading.Lock()
         self._status = {
             "running": False,
@@ -35,6 +40,25 @@ class Engine:
             "error": None,
         }
         self._industry_backfill_running = False
+
+    @property
+    def mid(self) -> str:
+        return self.market.id
+
+    def _load_universe(self):
+        if self.mid == "hk":
+            return load_universe_hk()
+        return load_universe_us()
+
+    def _eval_kwargs(self) -> dict:
+        return {
+            "min_market_cap": self.market.min_market_cap,
+            "micro_cap": self.market.micro_cap,
+            "penny_price": self.market.penny_price,
+            "apply_otc_gate": self.market.apply_otc_gate,
+            "cap_fail_label": self.market.cap_fail_label,
+            "rs_label": self.market.rs_score_label,
+        }
 
     def status(self) -> dict:
         with self._lock:
@@ -54,7 +78,7 @@ class Engine:
                 "message": "開始更新",
                 "error": None,
             }
-            threading.Thread(target=self._run, name="kailut-refresh", daemon=True).start()
+            threading.Thread(target=self._run, name=f"kailut-refresh-{self.mid}", daemon=True).start()
             return True
 
     def _run(self) -> None:
@@ -69,19 +93,21 @@ class Engine:
             self._set(running=False, message="更新失敗", error="更新時發生問題，請稍後再試")
 
     def _refresh(self) -> None:
-        self._set(progress=3, message="正在讀取美股符號目錄")
-        constituents, source = load_universe()
+        pool_label = "港股證券名單" if self.mid == "hk" else "美股符號目錄"
+        bench = self.market.benchmark
+        self._set(progress=3, message=f"正在讀取{pool_label}")
+        constituents, source = self._load_universe()
         if LIMIT:
             constituents = constituents[:LIMIT]
         symbols = [item["symbol"] for item in constituents]
         total = len(symbols)
-        self._set(progress=6, message=f"股票池 {total} 隻，正在下載 SPY")
+        self._set(progress=6, message=f"股票池 {total} 隻，正在下載 {bench}")
 
         client = get_client()
-        spy_bars = client.chart("SPY")
+        spy_bars = client.chart(bench)
         if not spy_bars:
-            raise RuntimeError("未能下載 SPY，相對強度無法計算，未覆寫快取")
-        store.save_chart("SPY", spy_bars)
+            raise RuntimeError(f"未能下載 {bench}，相對強度無法計算，未覆寫快取")
+        store.save_chart(bench, spy_bars, market=self.mid)
 
         rows: list[dict] = []
         chart_ok = 0
@@ -116,7 +142,7 @@ class Engine:
 
             charts = client.charts(batch_symbols, workers=WORKERS, on_each=on_each)
             chart_ok += sum(1 for symbol in batch_symbols if symbol in charts)
-            store.upsert_charts(charts)
+            store.upsert_charts(charts, market=self.mid)
 
             self._set(
                 progress=min(90, 8 + int(80 * (done_before + len(batch_symbols)) / max(total, 1))),
@@ -134,6 +160,7 @@ class Engine:
                         charts.get(item["symbol"]),
                         quote,
                         spy_bars,
+                        **self._eval_kwargs(),
                     )
                 )
 
@@ -149,7 +176,7 @@ class Engine:
                     chart_failures=len(symbols) - chart_ok,
                     partial=batch_index + len(batch) < total,
                 )
-                store.save_snapshot(snapshot)
+                store.save_snapshot(snapshot, market=self.mid)
             # Free batch charts from memory.
             del charts
 
@@ -181,8 +208,8 @@ class Engine:
         )
         criteria = snapshot["meta"].setdefault("criteria", {})
         criteria["industrySource"] = "yahoo-assetProfile"
-        store.save_snapshot(snapshot)
-        store.prune_charts(set(symbols) | {"SPY"})
+        store.save_snapshot(snapshot, market=self.mid)
+        store.prune_charts(set(symbols) | {self.market.benchmark}, market=self.mid)
         summary = snapshot["meta"]["summary"]
         log.info(
             "refresh done universe=%s pass=%s failures=%s",
@@ -214,14 +241,21 @@ class Engine:
                     "partial": partial,
                 },
                 "summary": summary,
-                "spy": spy_snapshot(spy_bars),
+                "spy": spy_snapshot(spy_bars, symbol=self.market.benchmark),
+                "benchmark": {
+                    "symbol": self.market.benchmark,
+                    "label": self.market.benchmark_label,
+                },
+                "market": self.mid,
                 "source": "Yahoo Finance 圖表與報價（免費公開接口，無需 API 金鑰）",
                 "dollarVolumeMethod": "優先取過去63個交易日的未還原收市價乘成交量之平均；不足則用三個月平均成交量乘現價。流動性只作評分，不作硬性門檻。",
                 "adjustment": "K線及均線使用拆股還原價；成交額用未還原收市價乘成交量。",
+                "marketCapNote": self.market.market_cap_note,
                 "ttlHours": TTL_HOURS,
                 "chartFailures": chart_failures,
                 "criteria": {
-                    "minMarketCap": 2_000_000_000,
+                    "minMarketCap": self.market.min_market_cap,
+                    "marketCapCurrency": self.market.market_cap_currency,
                     "nearHighWithin": 0.25,
                     "closeAtSupportRuleVersion": RULE_VERSION,
                     "scoreRuleVersion": SCORE_RULE_VERSION,
@@ -232,7 +266,7 @@ class Engine:
 
     def prepare_snapshot(self) -> dict | None:
         """Load snapshot and apply one-shot backfills. Returns None when cache is empty."""
-        snapshot = store.load_snapshot()
+        snapshot = store.load_snapshot(self.mid)
         if snapshot is None:
             return None
         meta = snapshot.get("meta") or {}
@@ -265,7 +299,7 @@ class Engine:
                 meta = snapshot.setdefault("meta", {})
                 criteria = meta.setdefault("criteria", {})
                 criteria["industrySource"] = "yahoo-assetProfile"
-                store.save_snapshot(snapshot)
+                store.save_snapshot(snapshot, market=self.mid)
             if any(self._row_needs_industry(row) for row in snapshot["rows"]):
                 self.start_industry_backfill()
         return snapshot
@@ -297,7 +331,7 @@ class Engine:
     def _backfill_close_at_support(self, snapshot: dict) -> None:
         """Fill closeAtSupport on older cached rows from daily charts (one-shot)."""
         for row in snapshot["rows"]:
-            bars = store.load_chart(row["symbol"])
+            bars = store.load_chart(row["symbol"], market=self.mid)
             matched, note, flagged = detect_close_at_support(bars or [])
             row["closeAtSupport"] = matched
             row["closeAtSupportNote"] = note
@@ -315,15 +349,15 @@ class Engine:
         criteria = meta.setdefault("criteria", {})
         criteria["closeAtSupportRuleVersion"] = RULE_VERSION
         criteria.pop("breakoutRetestRuleVersion", None)
-        store.save_snapshot(snapshot)
+        store.save_snapshot(snapshot, market=self.mid)
         log.info("backfilled closeAtSupport v%s on %s cached rows", RULE_VERSION, len(snapshot["rows"]))
 
     def _backfill_score_rules(self, snapshot: dict) -> None:
         """Recompute Stage 2 rows (hard gates, score, RS) when score rules change."""
-        spy_bars = store.load_chart("SPY") or []
+        spy_bars = store.load_chart(self.market.benchmark, market=self.mid) or []
         updated = []
         for row in snapshot["rows"]:
-            bars = store.load_chart(row["symbol"])
+            bars = store.load_chart(row["symbol"], market=self.mid)
             quote = {
                 "price": row.get("price"),
                 "changePct": row.get("changePct"),
@@ -342,7 +376,7 @@ class Engine:
                 "sector": row.get("sectorEn") or row.get("sector"),
                 "industry": row.get("industryEn") or row.get("industry"),
             }
-            fresh = evaluate(base, bars, quote, spy_bars)
+            fresh = evaluate(base, bars, quote, spy_bars, **self._eval_kwargs())
             for key in ("closeAtSupport", "closeAtSupportNote", "closeAtSupportLevel", "closeAtSupportTouches", "closeAtSupportZoneLow", "closeAtSupportZoneHigh", "revenueGrowth", "earningsGrowth", "profitMargin"):
                 if key in row:
                     fresh[key] = row[key]
@@ -351,7 +385,12 @@ class Engine:
         snapshot["rows"] = updated
         meta = snapshot.setdefault("meta", {})
         if spy_bars:
-            meta["spy"] = spy_snapshot(spy_bars)
+            meta["spy"] = spy_snapshot(spy_bars, symbol=self.market.benchmark)
+            meta["benchmark"] = {
+                "symbol": self.market.benchmark,
+                "label": self.market.benchmark_label,
+            }
+            meta["market"] = self.mid
             meta["summary"] = summarize(updated)
         criteria = meta.setdefault("criteria", {})
         criteria["scoreRuleVersion"] = SCORE_RULE_VERSION
@@ -362,53 +401,54 @@ class Engine:
         if isinstance(universe, dict) and "unique" in universe and "evaluated" not in universe:
             universe["evaluated"] = len(updated)
             universe.setdefault("partial", False)
-        store.save_snapshot(snapshot)
+        store.save_snapshot(snapshot, market=self.mid)
         log.info("backfilled score rules v%s on %s cached rows", SCORE_RULE_VERSION, len(updated))
 
     def detail(self, symbol: str, interval: str = "1d") -> dict:
-        symbol = normalize_symbol(symbol)
+        symbol = self.normalize_symbol(symbol)
         interval = normalize_interval(interval)
-        snapshot = store.load_snapshot()
+        bench = self.market.benchmark
+        snapshot = store.load_snapshot(self.mid)
         row = None
         if snapshot:
             row = next((item for item in snapshot["rows"] if item["symbol"] == symbol), None)
         client = get_client()
         quote = None
         if interval == "1d":
-            bars = store.load_chart(symbol)
+            bars = store.load_chart(symbol, market=self.mid)
             if bars is None or row is None:
                 quote_map = client.quotes([symbol])
                 quote = quote_map.get(symbol)
                 if quote and quote.get("quoteType") not in (None, "EQUITY"):
-                    raise LookupError("這不是美股普通股")
+                    raise LookupError(self.market.equity_only_message)
             if bars is None:
                 bars = client.chart(symbol, interval="1d")
                 if bars:
-                    store.save_chart(symbol, bars)
-            spy = store.load_chart("SPY") or []
+                    store.save_chart(symbol, bars, market=self.mid)
+            spy = store.load_chart(bench, market=self.mid) or []
             if not spy:
                 try:
-                    spy = client.chart("SPY", interval="1d") or []
+                    spy = client.chart(bench, interval="1d") or []
                     if spy:
-                        store.save_chart("SPY", spy)
+                        store.save_chart(bench, spy, market=self.mid)
                 except Exception:
-                    log.exception("failed to load SPY chart for detail overlay")
+                    log.exception("failed to load %s chart for detail overlay", bench)
                     spy = []
         else:
             if row is None:
                 quote_map = client.quotes([symbol])
                 quote = quote_map.get(symbol)
                 if quote and quote.get("quoteType") not in (None, "EQUITY"):
-                    raise LookupError("這不是美股普通股")
-            # Weekly/hourly always hit Yahoo — fetch symbol + SPY in parallel.
+                    raise LookupError(self.market.equity_only_message)
+            # Weekly/hourly always hit Yahoo — fetch symbol + benchmark in parallel.
             bars, spy = self._fetch_charts_parallel(client, symbol, interval)
         if not bars:
             raise LookupError("找不到這隻股份的圖表資料")
         eval_bars = bars
         eval_spy = spy
         if interval != "1d":
-            daily = store.load_chart(symbol)
-            daily_spy = store.load_chart("SPY") or []
+            daily = store.load_chart(symbol, market=self.mid)
+            daily_spy = store.load_chart(bench, market=self.mid) or []
             if daily:
                 eval_bars = daily
             if daily_spy:
@@ -419,11 +459,11 @@ class Engine:
             base = {
                 "symbol": symbol,
                 "name": (quote or {}).get("name") or symbol,
-                "groups": [],
+                "groups": [self.market.universe_group],
                 "sector": None,
                 "industry": None,
             }
-            row = evaluate(base, eval_bars, quote or {}, eval_spy)
+            row = evaluate(base, eval_bars, quote or {}, eval_spy, **self._eval_kwargs())
         # Chart path is cache-only for fundamentals — never wait on Yahoo quoteSummary.
         # SPA loads /api/stock/{symbol}/profile when profilePending is true.
         fundamentals = self._fundamentals(symbol, allow_network=False)
@@ -468,7 +508,7 @@ class Engine:
             "sma50": _sma_points(bars, SMA_FAST),
             "sma150": _sma_points(bars, SMA_MID),
             "sma200": _sma_points(bars, SMA_SLOW),
-            "index": _index_series(spy, symbol="SPY", label="標普500（SPY）"),
+            "index": _index_series(spy, symbol=bench, label=self.market.benchmark_label),
             "levels": levels,
             "notes": notes,
             "profile": profile,
@@ -478,8 +518,8 @@ class Engine:
 
     def profile(self, symbol: str) -> dict:
         """Secondary company profile fetch (may hit Yahoo). Does not block chart."""
-        symbol = normalize_symbol(symbol)
-        snapshot = store.load_snapshot()
+        symbol = self.normalize_symbol(symbol)
+        snapshot = store.load_snapshot(self.mid)
         row = None
         if snapshot:
             row = next((item for item in snapshot["rows"] if item["symbol"] == symbol), None)
@@ -529,9 +569,13 @@ class Engine:
 
         def load_spy() -> list:
             try:
-                return client.chart("SPY", interval=interval) or []
+                return client.chart(self.market.benchmark, interval=interval) or []
             except Exception:
-                log.exception("failed to load SPY %s chart for detail overlay", interval)
+                log.exception(
+                    "failed to load %s %s chart for detail overlay",
+                    self.market.benchmark,
+                    interval,
+                )
                 return []
 
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -613,7 +657,7 @@ class Engine:
         return base
 
     def _cached_sector_industry(self, symbol: str) -> dict | None:
-        cached = store.load_fundamentals(symbol)
+        cached = store.load_fundamentals(symbol, market=self.mid)
         if not cached:
             return None
         sector = cached.get("sector")
@@ -650,13 +694,13 @@ class Engine:
         return changed
 
     def _persist_profile(self, symbol: str, profile: dict) -> None:
-        existing = store.load_fundamentals(symbol) or {}
+        existing = store.load_fundamentals(symbol, market=self.mid) or {}
         existing.pop("updatedAt", None)
         if profile.get("sector"):
             existing["sector"] = profile["sector"]
         if profile.get("industry"):
             existing["industry"] = profile["industry"]
-        store.save_fundamentals(symbol, existing)
+        store.save_fundamentals(symbol, existing, market=self.mid)
 
     def _row_needs_industry(self, row: dict) -> bool:
         return not (
@@ -731,14 +775,14 @@ class Engine:
             self._industry_backfill_running = True
         threading.Thread(
             target=self._run_industry_backfill,
-            name="kailut-industry-backfill",
+            name=f"kailut-industry-backfill-{self.mid}",
             daemon=True,
         ).start()
         return True
 
     def _run_industry_backfill(self) -> None:
         try:
-            snapshot = store.load_snapshot()
+            snapshot = store.load_snapshot(self.mid)
             if not snapshot:
                 return
             rows = snapshot.get("rows") or []
@@ -773,7 +817,7 @@ class Engine:
                 meta = snapshot.setdefault("meta", {})
                 criteria = meta.setdefault("criteria", {})
                 criteria["industrySource"] = "yahoo-assetProfile"
-                store.save_snapshot(snapshot)
+                store.save_snapshot(snapshot, market=self.mid)
                 log.info("industry backfill passHard filled=%s", filled_pass)
             # Then remaining evaluated rows from cache/Yahoo.
             filled_rest = self._enrich_rows_with_profiles(
@@ -787,7 +831,7 @@ class Engine:
             meta = snapshot.setdefault("meta", {})
             criteria = meta.setdefault("criteria", {})
             criteria["industrySource"] = "yahoo-assetProfile"
-            store.save_snapshot(snapshot)
+            store.save_snapshot(snapshot, market=self.mid)
             log.info("industry backfill done rest_filled=%s", filled_rest)
         except Exception:
             log.exception("industry backfill failed")
@@ -820,7 +864,7 @@ class Engine:
         forced a Yahoo quoteSummary round-trip. When Yahoo was slow/auth-flaky
         that stalled /api/stock for ~5s and blocked the chart.
         """
-        cached = store.load_fundamentals(symbol)
+        cached = store.load_fundamentals(symbol, market=self.mid)
         stamp = self._fundamentals_stamp(cached)
         fresh_enough = bool(stamp) and datetime.now(timezone.utc) - stamp < FUNDAMENTAL_TTL
         has_summary = bool(cached) and ("summary" in cached)
@@ -851,16 +895,33 @@ class Engine:
             # Mark that a full quoteSummary landed (summary key may still be null).
             fresh = dict(fresh)
             fresh["_summaryFetched"] = True
-            store.save_fundamentals(symbol, fresh)
+            store.save_fundamentals(symbol, fresh, market=self.mid)
             return fresh
         return cached
 
 
-def normalize_symbol(symbol: str) -> str:
-    cleaned = symbol.strip().upper().replace(".", "-")
-    if not SYMBOL_RE.fullmatch(cleaned):
-        raise ValueError("代號格式不正確")
-    return cleaned
+    def normalize_symbol(self, symbol: str) -> str:
+        raw = symbol.strip().upper()
+        if self.mid == "hk":
+            digits = "".join(ch for ch in raw if ch.isdigit())
+            if not digits:
+                raise ValueError("代號格式不正確")
+            try:
+                num = int(digits)
+            except ValueError as exc:
+                raise ValueError("代號格式不正確") from exc
+            cleaned = f"{num:04d}.HK"
+            if not HK_SYMBOL_RE.fullmatch(cleaned):
+                raise ValueError("代號格式不正確")
+            return cleaned
+        cleaned = raw.replace(".", "-")
+        if not US_SYMBOL_RE.fullmatch(cleaned):
+            raise ValueError("代號格式不正確")
+        return cleaned
+
+
+def normalize_symbol(symbol: str, market: str = "us") -> str:
+    return engines[market].normalize_symbol(symbol)
 
 
 def _index_series(bars: list[dict], *, symbol: str, label: str) -> dict:
@@ -894,10 +955,10 @@ def _sma_points(bars: list[dict], window: int) -> list[dict]:
     return points
 
 
-def cooldown_block(force: bool) -> str | None:
+def cooldown_block(force: bool, market: str = "us") -> str | None:
     if force:
         return None
-    snapshot = store.load_snapshot()
+    snapshot = store.load_snapshot(market)
     if snapshot is None:
         return None
     age = store.age_seconds(snapshot)
@@ -906,4 +967,6 @@ def cooldown_block(force: bool) -> str | None:
     return None
 
 
-engine = Engine()
+engine = Engine(US_MARKET)
+engine_hk = Engine(HK_MARKET)
+engines = {"us": engine, "hk": engine_hk}
