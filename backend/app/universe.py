@@ -205,7 +205,7 @@ def fetch_universe() -> list[dict]:
     other_rows = parse_other_listed(other_text)
     rows = _merge(nasdaq_rows + other_rows)
     if len(rows) < 1000:
-        raise RuntimeError(f"美股宇宙過少（{len(rows)}），拒絕覆寫")
+        raise RuntimeError(f"美股股票池過少（{len(rows)}），拒絕覆寫")
     return rows
 
 

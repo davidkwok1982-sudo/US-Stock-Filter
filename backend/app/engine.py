@@ -75,7 +75,7 @@ class Engine:
             constituents = constituents[:LIMIT]
         symbols = [item["symbol"] for item in constituents]
         total = len(symbols)
-        self._set(progress=6, message=f"宇宙 {total} 隻，正在下載 SPY")
+        self._set(progress=6, message=f"股票池 {total} 隻，正在下載 SPY")
 
         client = get_client()
         spy_bars = client.chart("SPY")

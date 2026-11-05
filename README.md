@@ -48,7 +48,7 @@ docker compose up --build
 | `KAI_LUT_WORKERS` | `10` | 下載日線的並行數 |
 | `KAI_LUT_CHUNK` | `250` | 全量更新每批符號數（避免一次載入過多） |
 | `KAI_LUT_COOLDOWN` | `300` | 手動「重新整理」的最短間隔（秒） |
-| `KAI_LUT_LIMIT` | 不設 | 只取宇宙前 N 隻，方便除錯 |
+| `KAI_LUT_LIMIT` | 不設 | 只取股票池前 N 隻，方便除錯 |
 
 ## 篩選在算甚麼
 

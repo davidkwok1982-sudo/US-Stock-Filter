@@ -79,7 +79,7 @@ export function ScreenPage() {
             </div>
             <BreadthMeter count={passCount} />
             <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              宇宙為全美上市普通股（已剔除 ADR 與 ETF），目前 {data.meta.universe.unique} 隻
+              股票池為全美上市普通股（已剔除 ADR 與 ETF），目前 {data.meta.universe.unique} 隻
               {data.meta.universe.evaluated != null && data.meta.universe.evaluated !== data.meta.universe.unique
                 ? `（已評估 ${data.meta.universe.evaluated}）`
                 : ""}

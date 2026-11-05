@@ -33,7 +33,7 @@ export function StrategyPage() {
           股價相對 200 天線的位置可分成四個階段。第一階段是底部整固，均線走平。第二階段是上升趨勢，股價站上並通常帶動向上的長期均線。第三階段見頂派發。第四階段跌破長期均線。
         </p>
         <p>
-          本站把第二階段相關條件寫成可檢查的數字，宇宙覆蓋全美上市普通股（已剔除 ADR 與 ETF），並用評分在通過名單裡排序。
+          本站把第二階段相關條件寫成可檢查的數字，股票池覆蓋全美上市普通股（已剔除 ADR 與 ETF），並用評分在通過名單裡排序。
         </p>
       </section>
 
@@ -82,7 +82,7 @@ export function StrategyPage() {
       </section>
 
       <section className="space-y-3 text-sm leading-relaxed">
-        <h2 className="font-heading text-2xl">數據與宇宙</h2>
+        <h2 className="font-heading text-2xl">數據與股票池</h2>
         <p>
           成份來自 Nasdaq Trader 免費符號目錄（nasdaqlisted／otherlisted），保留美股普通股，剔除 ETF、ETN、NextShares、ADR／ADS、測試股、權證、單位、優先股等明顯標記。下載失敗時改用上一次成功存下來的名單。
         </p>
