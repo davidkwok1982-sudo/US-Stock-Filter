@@ -62,11 +62,11 @@ def build_notes(row: dict, levels: list[dict]) -> dict:
         )
         if stacked:
             technical.append(
-                f"現價 {_px(price)} 呈價＞50＞150＞200（50 {_px(sma50)}、150 {_px(sma150)}、200 {_px(sma200)}）。{slope_bits}"
+                f"現價 {_px(price)} 股價＞50＞150＞200（50 {_px(sma50)}、150 {_px(sma150)}、200 {_px(sma200)}）。{slope_bits}"
             )
         else:
             technical.append(
-                f"現價 {_px(price)} 未呈價＞50＞150＞200（50 {_px(sma50)}、150 {_px(sma150)}、200 {_px(sma200)}）。{slope_bits}"
+                f"現價 {_px(price)} 股價＞50＞150＞200（50 {_px(sma50)}、150 {_px(sma150)}、200 {_px(sma200)}）。{slope_bits}"
             )
     elif price and sma200:
         distance = price / sma200 - 1

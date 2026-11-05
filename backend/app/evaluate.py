@@ -26,7 +26,7 @@ from app.metrics import (
 )
 
 FAILS = {
-    "ma_stack": "未呈價＞50＞150＞200",
+    "ma_stack": "股價＞50＞150＞200",
     "ma_slope": "均線未全部向上",
     "cap": "市值不足20億美元或未明",
     "otc": "場外交易",
