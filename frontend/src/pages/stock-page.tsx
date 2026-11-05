@@ -273,6 +273,8 @@ export function StockPage() {
             <p className="text-sm text-muted-foreground">未過：{row.failReasons.join("、")}</p>
           ) : null}
 
+          <ResearchPromptCard symbol={row.symbol} />
+
           {detail.profile ? (
             <CompanyProfileCard profile={detail.profile} summaryOpen={summaryOpen} onToggleSummary={() => setSummaryOpen((v) => !v)} />
           ) : profileLoading || detail.profilePending ? (
@@ -507,6 +509,62 @@ function CompanyProfileCard({
         <p className="border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
           資料來自 Yahoo Finance 公開接口，可能落後或不全。
         </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function buildResearchPrompt(symbol: string): string {
+  const s = symbol.trim().toUpperCase()
+  return [
+    `將我當成18歲，解釋 ${s} 公司業務`,
+    `簡介 ${s} 公司業務做什麼，最近業務有什麼新改變？`,
+    `從 ${s} 公司最近的業績 / 管理層透露的口風，有什麼亮點或值得關注的事情？`,
+    `${s} 公司受惠什麼市場敘事？`,
+  ].join("\n")
+}
+
+function ResearchPromptCard({ symbol }: { symbol: string }) {
+  const prompt = buildResearchPrompt(symbol)
+  const [copied, setCopied] = useState(false)
+
+  async function copyPrompt() {
+    try {
+      await navigator.clipboard.writeText(prompt)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      try {
+        const ta = document.createElement("textarea")
+        ta.value = prompt
+        ta.setAttribute("readonly", "")
+        ta.style.position = "fixed"
+        ta.style.left = "-9999px"
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand("copy")
+        document.body.removeChild(ta)
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 2000)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
+        <div>
+          <CardTitle className="font-heading text-xl">研究提示詞</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">複製後可貼到 AI 對話，深入了解這間公司。</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={copyPrompt} aria-label="複製提示詞">
+          {copied ? "已複製" : "複製"}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <pre className="whitespace-pre-wrap rounded-lg border border-border bg-secondary/40 px-3 py-3 text-sm leading-relaxed font-sans">{prompt}</pre>
       </CardContent>
     </Card>
   )
