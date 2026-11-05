@@ -36,57 +36,75 @@ export function Layout() {
   return (
     <div className="min-h-svh bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-foreground bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-          <NavLink to={home} className="min-w-0 shrink-0">
-            <span className="font-heading text-3xl leading-none font-semibold tracking-wide">{heading}</span>
-            <span className="mt-1 block text-[11px] tracking-[0.18em] text-muted-foreground">{subtitle}</span>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2.5 sm:gap-x-3 sm:px-4 sm:py-3">
+          <NavLink to={home} className="min-w-0 max-w-full shrink">
+            <span className="font-heading text-xl leading-tight font-semibold tracking-wide sm:text-3xl sm:leading-none">
+              {heading}
+            </span>
+            <span className="mt-0.5 block truncate text-[10px] tracking-[0.14em] text-muted-foreground sm:mt-1 sm:text-[11px] sm:tracking-[0.18em]">
+              {subtitle}
+            </span>
           </NavLink>
-          <div className="ml-2 flex shrink-0 overflow-hidden rounded-md border border-border" role="group" aria-label="市場">
-            {(["us", "hk"] as MarketId[]).map((id) => {
-              const m = MARKETS[id]
-              const active = market === id
-              return (
+          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+            <div className="flex shrink-0 overflow-hidden rounded-md border border-border" role="group" aria-label="市場">
+              {(["us", "hk"] as MarketId[]).map((id) => {
+                const m = MARKETS[id]
+                const active = market === id
+                return (
+                  <NavLink
+                    key={id}
+                    to={withSearch(m.basePath || "/", location.search)}
+                    className={`px-2 py-1 text-xs font-medium sm:px-2.5 ${marketTabClass(active)}`}
+                  >
+                    {id === "us" ? "美股" : "港股"}
+                  </NavLink>
+                )
+              })}
+            </div>
+            <div className="flex shrink-0 overflow-hidden rounded-md border border-border" role="group" aria-label="長倉或短倉">
+              {(["long", "short"] as Side[]).map((id) => {
+                const active = side === id
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setSide(id)}
+                    className={`px-2 py-1 text-xs font-medium sm:px-2.5 ${marketTabClass(active)}`}
+                  >
+                    {id === "long" ? "長倉" : "短倉"}
+                  </button>
+                )
+              })}
+            </div>
+            <nav className="hidden items-center gap-1 md:flex" aria-label="主要">
+              {links.map((link) => (
                 <NavLink
-                  key={id}
-                  to={withSearch(m.basePath || "/", location.search)}
-                  className={`px-2.5 py-1 text-xs font-medium ${marketTabClass(active)}`}
+                  key={link.label}
+                  to={link.to}
+                  end={link.end}
+                  className={({ isActive }) => `rounded-md px-3 py-1.5 text-sm ${navClass(isActive)}`}
                 >
-                  {id === "us" ? "美股" : "港股"}
+                  {link.label}
                 </NavLink>
-              )
-            })}
+              ))}
+            </nav>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 px-2 sm:px-3"
+              onClick={() => void refresh()}
+              disabled={refreshing}
+            >
+              {refreshing ? "更新中" : (
+                <>
+                  <span className="sm:hidden">更新</span>
+                  <span className="hidden sm:inline">重新整理</span>
+                </>
+              )}
+            </Button>
           </div>
-          <div className="flex shrink-0 overflow-hidden rounded-md border border-border" role="group" aria-label="長倉或短倉">
-            {(["long", "short"] as Side[]).map((id) => {
-              const active = side === id
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setSide(id)}
-                  className={`px-2.5 py-1 text-xs font-medium ${marketTabClass(active)}`}
-                >
-                  {id === "long" ? "長倉" : "短倉"}
-                </button>
-              )
-            })}
-          </div>
-          <nav className="ml-auto hidden items-center gap-1 md:flex" aria-label="主要">
-            {links.map((link) => (
-              <NavLink
-                key={link.label}
-                to={link.to}
-                end={link.end}
-                className={({ isActive }) => `rounded-md px-3 py-1.5 text-sm ${navClass(isActive)}`}
-              >
-                {link.label}
-              </NavLink>
-            ))}
-          </nav>
-          <Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing}>
-            {refreshing ? "更新中" : "重新整理"}
-          </Button>
         </div>
         <div className="h-[3px] bg-primary" />
       </header>

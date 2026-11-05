@@ -214,12 +214,14 @@ class Engine:
             raise RuntimeError(f"報價下載不足（{quote_ok}/{total}），未覆寫快取")
 
         self._set(progress=91, message="正在補齊行業分類")
-        # Cache for everyone; network fetch only passHard (5k Yahoo profile calls
-        # stall refresh). Remaining labels backfill via /api/screen / background.
+        # Cache for everyone; network fetch only long+short passHard (5k Yahoo
+        # profile calls stall refresh). Remaining labels backfill in background.
+        # Short passers often fail the long gate, so long-only fetch left the
+        # short heatmap stuck on 未分類.
         self._enrich_rows_with_profiles(rows, fetch_missing=False, quiet=True)
-        pass_hard = [row for row in rows if row.get("passHard")]
+        priority = self._industry_priority_rows(rows, short_rows)
         self._enrich_rows_with_profiles(
-            pass_hard,
+            priority,
             fetch_missing=True,
             pass_hard_first=True,
             quiet=False,
@@ -411,16 +413,24 @@ class Engine:
         ):
             self._backfill_score_rules(snapshot)
         if self._needs_industry_backfill(snapshot):
-            # FastAPI Cloud workers are short-lived; fill passHard synchronously so
-            # the heatmap is correct on the same response, then backfill the rest.
-            pass_hard = [row for row in snapshot["rows"] if row.get("passHard")]
-            missing_pass = [row for row in pass_hard if self._row_needs_industry(row)]
+            # FastAPI Cloud workers are short-lived; fill long+short passHard
+            # synchronously so both heatmaps are correct on the same response,
+            # then backfill the rest.
+            priority = self._industry_priority_rows(
+                snapshot.get("rows") or [],
+                snapshot.get("rowsShort") or [],
+            )
+            missing_pass = [row for row in priority if self._row_needs_industry(row)]
             if missing_pass:
                 self._enrich_rows_with_profiles(
                     missing_pass,
                     fetch_missing=True,
                     pass_hard_first=True,
                     quiet=True,
+                )
+                self._sync_short_labels(
+                    snapshot.get("rows") or [],
+                    snapshot.get("rowsShort") or [],
                 )
                 meta = snapshot.setdefault("meta", {})
                 criteria = meta.setdefault("criteria", {})
@@ -942,9 +952,23 @@ class Engine:
         log.info("industry enrich filled=%s fetched_attempt=%s", filled, total_missing)
         return filled
 
+    def _industry_priority_rows(self, rows: list[dict], short_rows: list[dict] | None = None) -> list[dict]:
+        """Long-row objects that passed long and/or short Stage 2 (heatmap first)."""
+        short_pass = {
+            row["symbol"]
+            for row in (short_rows or [])
+            if row.get("passHard")
+        }
+        targets = [
+            row
+            for row in rows
+            if row.get("passHard") or row.get("symbol") in short_pass
+        ]
+        return targets or list(rows)
+
     def _needs_industry_backfill(self, snapshot: dict) -> bool:
         rows = snapshot.get("rows") or []
-        targets = [row for row in rows if row.get("passHard")] or rows
+        targets = self._industry_priority_rows(rows, snapshot.get("rowsShort") or [])
         if not targets:
             return False
         return any(self._row_needs_industry(row) for row in targets)
@@ -969,11 +993,15 @@ class Engine:
             rows = snapshot.get("rows") or []
             if not rows:
                 return
-            missing_pass = [
-                row for row in rows if row.get("passHard") and self._row_needs_industry(row)
-            ]
-            log.info("industry backfill start missing_passHard=%s", len(missing_pass))
-            # Fill passHard first and persist so the heatmap updates quickly.
+            short_rows = snapshot.get("rowsShort") or []
+            priority = self._industry_priority_rows(rows, short_rows)
+            missing_pass = [row for row in priority if self._row_needs_industry(row)]
+            log.info(
+                "industry backfill start missing_priority=%s short_pass=%s",
+                len(missing_pass),
+                sum(1 for row in short_rows if row.get("passHard")),
+            )
+            # Fill long+short passHard first and persist so both heatmaps update.
             if missing_pass:
                 filled_pass = self._enrich_rows_with_profiles(
                     missing_pass,
@@ -993,8 +1021,10 @@ class Engine:
                                 "industry": row.get("industryEn") or row.get("industry"),
                             },
                         )
+                self._sync_short_labels(rows, short_rows)
                 rows.sort(key=lambda row: (-row["score"], row["symbol"]))
                 snapshot["rows"] = rows
+                snapshot["rowsShort"] = short_rows
                 meta = snapshot.setdefault("meta", {})
                 criteria = meta.setdefault("criteria", {})
                 criteria["industrySource"] = "yahoo-assetProfile"
@@ -1007,8 +1037,10 @@ class Engine:
                 pass_hard_first=False,
                 quiet=True,
             )
+            self._sync_short_labels(rows, short_rows)
             rows.sort(key=lambda row: (-row["score"], row["symbol"]))
             snapshot["rows"] = rows
+            snapshot["rowsShort"] = short_rows
             meta = snapshot.setdefault("meta", {})
             criteria = meta.setdefault("criteria", {})
             criteria["industrySource"] = "yahoo-assetProfile"

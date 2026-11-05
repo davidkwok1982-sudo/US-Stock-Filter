@@ -575,6 +575,110 @@ def test_enrich_rows_uses_fundamentals_cache(tmp_path, monkeypatch):
     assert rows[0]["industry"]  # zh or passthrough
 
 
+def test_industry_priority_includes_short_only_passers(tmp_path, monkeypatch):
+    """Short heatmap needs profiles for names that fail the long Stage 2 gate."""
+    from app.engine import Engine
+    from app import store as store_mod
+
+    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
+    engine = Engine()
+    rows = [
+        {
+            "symbol": "LONG",
+            "passHard": True,
+            "score": 90,
+            "sector": None,
+            "sectorEn": None,
+            "industry": None,
+            "industryEn": None,
+        },
+        {
+            "symbol": "SHORTONLY",
+            "passHard": False,
+            "score": 5,
+            "sector": None,
+            "sectorEn": None,
+            "industry": None,
+            "industryEn": None,
+        },
+        {
+            "symbol": "NEITHER",
+            "passHard": False,
+            "score": 1,
+            "sector": None,
+            "sectorEn": None,
+            "industry": None,
+            "industryEn": None,
+        },
+    ]
+    short_rows = [
+        {**rows[0], "passHard": False, "score": 2},
+        {**rows[1], "passHard": True, "score": 88},
+        {**rows[2], "passHard": False, "score": 1},
+    ]
+    priority = engine._industry_priority_rows(rows, short_rows)
+    assert [row["symbol"] for row in priority] == ["LONG", "SHORTONLY"]
+    snapshot = {"rows": rows, "rowsShort": short_rows}
+    assert engine._needs_industry_backfill(snapshot) is True
+
+
+def test_sync_short_labels_copies_industry_onto_short_passers(tmp_path, monkeypatch):
+    from app.engine import Engine
+    from app import store as store_mod
+
+    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
+    store_mod.init_db()
+    store_mod.save_fundamentals(
+        "WEAK", {"sector": "Energy", "industry": "Oil & Gas E&P"}
+    )
+    engine = Engine()
+    long_rows = [
+        {
+            "symbol": "WEAK",
+            "name": "Weak Co",
+            "passHard": False,
+            "score": 4,
+            "sector": None,
+            "sectorEn": None,
+            "industry": None,
+            "industryEn": None,
+            "groups": ["us"],
+            "groupLabels": ["美股"],
+            "exchange": "NYSE",
+            "pe": None,
+        }
+    ]
+    short_rows = [
+        {
+            "symbol": "WEAK",
+            "name": "Weak Co",
+            "passHard": True,
+            "score": 91,
+            "sector": None,
+            "sectorEn": None,
+            "industry": None,
+            "industryEn": None,
+            "groups": ["us"],
+            "groupLabels": ["美股"],
+            "exchange": "NYSE",
+            "pe": None,
+        }
+    ]
+    filled = engine._enrich_rows_with_profiles(
+        engine._industry_priority_rows(long_rows, short_rows),
+        fetch_missing=False,
+    )
+    assert filled == 1
+    assert long_rows[0]["industryEn"] == "Oil & Gas E&P"
+    engine._sync_short_labels(long_rows, short_rows)
+    assert short_rows[0]["industryEn"] == "Oil & Gas E&P"
+    assert short_rows[0]["sectorEn"] == "Energy"
+    assert short_rows[0]["industry"]
+    assert short_rows[0]["sector"]
+
+
 def test_levels_include_atr_zones_and_min_touches():
     from app.levels import find_levels
     from app.swings import MIN_TOUCHES
