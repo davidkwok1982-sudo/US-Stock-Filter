@@ -74,7 +74,7 @@ def _paired(n: int = 280):
 
 
 def _uptrend_pair(n: int = 280):
-    """Steady climb so price > SMA50 > SMA150 > SMA200 and all slopes > 0."""
+    """Steady climb so SMA50 > SMA150 > SMA200 (and price above them) with slopes > 0."""
     day = date(2024, 1, 2)
     spy = 400.0
     stock = 60.0
@@ -148,7 +148,8 @@ def test_uptrend_passes_stage_two():
     assert row["maStacked"] is True
     assert row["slopeUp"] is True
     assert row["sma150"] is not None
-    assert row["price"] > row["sma50"] > row["sma150"] > row["sma200"]
+    assert row["sma50"] > row["sma150"] > row["sma200"]
+    assert row["price"] > row["sma50"]  # fixture property; soft score, not hard gate
     assert "beta" not in row
     assert "liquidity" not in row["failCodes"]
     assert row["sector"] == "資訊科技"
@@ -209,10 +210,12 @@ def test_downtrend_fails_ma_stack():
     assert "ma_slope" in row["failCodes"]
 
 
-def test_price_above_200_but_not_stacked_fails():
+def test_ma_order_broken_fails_stack():
+    """Price can sit above SMA200 while SMA50 is not above SMA150 > SMA200."""
     closes = [80 + i * 0.3 for i in range(250)]
     peak = closes[-1]
-    closes.extend([peak * (1 - 0.004 * i) for i in range(1, 21)])
+    # Sharp multi-month drop so the fast MA falls through mid/slow.
+    closes.extend([peak * (1 - 0.012 * i) for i in range(1, 61)])
     bars = _bars(date(2024, 1, 2), closes, volume=5_000_000)
     _, spy_bars = _uptrend_pair(n=len(closes) + 20)
     quote = {
@@ -228,10 +231,36 @@ def test_price_above_200_but_not_stacked_fails():
         spy_bars,
     )
     assert row["sma50"] is not None and row["sma150"] is not None and row["sma200"] is not None
-    assert row["price"] > row["sma200"]
-    assert not (row["price"] > row["sma50"] > row["sma150"] > row["sma200"])
+    assert not (row["sma50"] > row["sma150"] > row["sma200"])
     assert row["passHard"] is False
     assert "ma_stack" in row["failCodes"]
+
+
+def test_price_below_sma50_still_passes_when_ma_stack_ok():
+    """CRWD-style: price dipped under SMA50 but 50 > 150 > 200 and slopes up → passHard."""
+    stock_bars, spy_bars = _uptrend_pair()
+    last_close = stock_bars[-1]["close"]
+    # Quote below SMA50 but within the 25% quote/last_close guard; MAs from closes stay stacked.
+    quote_price = last_close * 0.90
+    quote = {
+        "price": quote_price,
+        "marketCap": 80_000_000_000,
+        "quoteType": "EQUITY",
+        "exchangeName": "NasdaqGS",
+        "avgVolume3m": 4_000_000,
+    }
+    row = evaluate(
+        {"symbol": "CRWD", "name": "CrowdStrike", "groups": ["us"], "sector": None, "industry": None},
+        stock_bars,
+        quote,
+        spy_bars,
+    )
+    assert row["sma50"] > row["sma150"] > row["sma200"]
+    assert row["price"] < row["sma50"]
+    assert row["maStacked"] is True
+    assert row["passHard"] is True
+    assert "ma_stack" not in row["failCodes"]
+    assert row["aboveSma50"] is False  # soft flag only
 
 
 def test_notes_omit_disclaimer_and_beta():

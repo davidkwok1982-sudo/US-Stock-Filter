@@ -82,7 +82,7 @@ export function ScreenPage() {
               SPY 近一星期 {formatPct(data.meta.spy.ret1w ?? data.meta.spy.ret6m)}。
             </p>
             <dl className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
-              <Stat label="股價＞50＞150＞200" value={data.meta.summary.failMaStack ?? data.meta.summary.failSma200} />
+              <Stat label="50＞150＞200" value={data.meta.summary.failMaStack ?? data.meta.summary.failSma200} />
               <Stat label="均線未全部向上" value={data.meta.summary.failMaSlope ?? 0} />
               <Stat label="市值不足或未明" value={data.meta.summary.failCap} />
             </dl>
@@ -135,7 +135,7 @@ export function ScreenPage() {
             <details className="text-sm text-muted-foreground">
               <summary className="cursor-pointer text-foreground">怎樣讀這張表</summary>
               <p className="mt-2 max-w-3xl leading-relaxed">
-                預設只列出通過篩選的股份：現價＞50天線＞150天線＞200天線、三條均線過去約一個月都向上、市值逾20億美元。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「跑贏 SPY」須近約 5 個與 20 個交易日收市對收市總回報減 SPY 皆為正。「收市近支持」以結構支持區（擺動＋近20／60日低點、≥2次觸及、±0.5×ATR）判斷；最新收市須落在該區內。
+                預設只列出通過篩選的股份：50天線＞150天線＞200天線、三條均線過去約一個月都向上、市值逾20億美元。評分把距離均線、斜率、近一星期相對 SPY 和流動性加總，方便排序。可選按鈕會再收緊名單，但不會改寫上面的通過家數。「跑贏 SPY」須近約 5 個與 20 個交易日收市對收市總回報減 SPY 皆為正。「收市近支持」以結構支持區（擺動＋近20／60日低點、≥2次觸及、±0.5×ATR）判斷；最新收市須落在該區內。
                 <Link to="/strategy" className="ml-2 text-foreground underline underline-offset-4">
                   策略說明
                 </Link>
