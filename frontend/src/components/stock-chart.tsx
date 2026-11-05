@@ -521,7 +521,7 @@ type RsExcessPoint = { time: ChartTime; value: number }
  * Same-bar excess return % vs SPY on the current chart timeframe.
  *
  * value = (stockBarReturn − spyBarReturn)×100 for each aligned bar
- * Positive = beat SPY that bar; negative = lag. Soft filters 跑贏 SPY 5/20 天
+ * Positive = beat SPY that bar; negative = lag. Soft filter 跑贏 SPY requires both 5d and 20d excess
  * stay on daily multi-day close-to-close excess (unchanged).
  */
 function computeRsExcess(stockBars: Bar[], spyBars: Bar[]): RsExcessPoint[] {

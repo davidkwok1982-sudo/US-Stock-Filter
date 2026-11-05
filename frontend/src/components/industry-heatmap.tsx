@@ -293,7 +293,7 @@ function IndustryBlock({
                   </span>
                   <span>版塊：{board}</span>
                   <span className="text-background/80">評分 {row.score} · 六個月 RS {formatPct(row.rs1w ?? row.rs6m)}</span>
-                  {row.rsBeat ? <span className="text-background/80">跑贏 SPY 5 天</span> : null}
+                  {row.rsBeat && row.rsBeat20 ? <span className="text-background/80">跑贏 SPY</span> : null}
                 </TooltipContent>
               </Tooltip>
             </li>

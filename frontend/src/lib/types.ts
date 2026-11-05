@@ -232,7 +232,6 @@ export type SortKey =
 export type Filters = {
   q: string
   rs: boolean
-  rs20: boolean
   support: boolean
   sort: SortKey
   dir: "asc" | "desc"
