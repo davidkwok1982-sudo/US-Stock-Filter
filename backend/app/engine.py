@@ -137,17 +137,19 @@ class Engine:
                     )
                 )
 
-            # Persist progressive snapshot so the UI can show a growing screen.
-            rows.sort(key=lambda row: (-row["score"], row["symbol"]))
-            snapshot = self._build_snapshot(
-                rows=rows,
-                spy_bars=spy_bars,
-                source=source,
-                universe_size=total,
-                chart_failures=len(symbols) - chart_ok,
-                partial=batch_index + len(batch) < total,
-            )
-            store.save_snapshot(snapshot)
+            # Persist progressive snapshot only when quotes landed; otherwise a
+            # quote outage would overwrite a good cache with passHard=0 rows.
+            if quotes:
+                rows.sort(key=lambda row: (-row["score"], row["symbol"]))
+                snapshot = self._build_snapshot(
+                    rows=rows,
+                    spy_bars=spy_bars,
+                    source=source,
+                    universe_size=total,
+                    chart_failures=len(symbols) - chart_ok,
+                    partial=batch_index + len(batch) < total,
+                )
+                store.save_snapshot(snapshot)
             # Free batch charts from memory.
             del charts
 

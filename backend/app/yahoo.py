@@ -217,24 +217,44 @@ class YahooClient:
 
     def quotes(self, symbols: list[str]) -> dict[str, dict]:
         found: dict[str, dict] = {}
+        endpoints = (
+            "https://query1.finance.yahoo.com/v7/finance/quote",
+            "https://query2.finance.yahoo.com/v7/finance/quote",
+        )
         for start in range(0, len(symbols), 80):
             chunk = symbols[start : start + 80]
-            response = self._get(
-                self._main,
-                "https://query1.finance.yahoo.com/v7/finance/quote",
-                params={"symbols": ",".join(chunk)},
-                auth=True,
-            )
-            if response is None:
-                continue
-            try:
-                payload = response.json()
-            except ValueError:
-                continue
-            for item in (payload.get("quoteResponse") or {}).get("result") or []:
-                symbol = item.get("symbol")
-                if symbol:
-                    found[symbol] = normalize_quote(item)
+            got_chunk = False
+            for endpoint in endpoints:
+                response = self._get(
+                    self._main,
+                    endpoint,
+                    params={"symbols": ",".join(chunk)},
+                    auth=True,
+                )
+                if response is None:
+                    with self._crumb_lock:
+                        self._crumb = None
+                    continue
+                try:
+                    payload = response.json()
+                except ValueError:
+                    with self._crumb_lock:
+                        self._crumb = None
+                    continue
+                results = (payload.get("quoteResponse") or {}).get("result") or []
+                if not results:
+                    # Empty result usually means a stale crumb; refresh and try next host.
+                    with self._crumb_lock:
+                        self._crumb = None
+                    continue
+                for item in results:
+                    symbol = item.get("symbol")
+                    if symbol:
+                        found[symbol] = normalize_quote(item)
+                got_chunk = True
+                break
+            if not got_chunk:
+                time.sleep(0.5)
         return found
 
     def chart(self, symbol: str, interval: str = "1d") -> list[dict] | None:
