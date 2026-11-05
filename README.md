@@ -52,6 +52,8 @@ docker compose up --build
 
 ## 篩選在算甚麼
 
+站內「策略說明」按六步講篩選思路：Stage 2 → 市值／流動性 → 跑贏大市（RS）→ 領導板塊 → 靠近 200 天線 → 收市近支持。
+
 硬性條件（預設表格與「通過家數」）：
 
 1. 現價＞50 天線＞150 天線＞200 天線
@@ -60,7 +62,7 @@ docker compose up --build
 
 可選收緊（不改寫通過家數）：跑贏 SPY（須同時跑贏 5 天與 20 天）、收市近支持。
 
-熱力圖只顯示細分版塊家數頭十位。
+熱力圖只顯示細分板塊家數頭十位。
 
 細節與評分表見站內「策略說明」。
 
@@ -81,4 +83,4 @@ cd ../frontend && npx tsc -b --noEmit
 
 ## 之後加策略
 
-`backend/app/strategies.py` 登記策略編號。`GET /api/screen?strategy=minervini`（內部策略 id，即將推出）目前回 501。第二階段的計算在 `backend/app/evaluate.py` 與 `metrics.py`。新策略可以沿用同一套 Yahoo 快取，另寫一個 `evaluate`，再在前端策略分頁接上。
+`backend/app/strategies.py` 登記策略編號。`GET /api/screen?strategy=minervini`（內部策略 id）目前回 501。第二階段的計算在 `backend/app/evaluate.py` 與 `metrics.py`。新策略可以沿用同一套 Yahoo 快取，另寫一個 `evaluate`，再在前端策略分頁接上。
