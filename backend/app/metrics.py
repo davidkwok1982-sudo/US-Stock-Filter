@@ -31,6 +31,8 @@ MICRO_CAP = 300_000_000
 
 # Bump when score parts / RS definition change so cached rows recompute.
 SCORE_RULE_VERSION = 5
+# Short rows live beside long rows. Bump when the short gate or score changes.
+SHORT_RULE_VERSION = 1
 
 # Freed nearHigh(15)+beta(5)=20 → slope / vsSma200 / rs / liquidity.
 SCORE_MAX = {
@@ -132,6 +134,24 @@ def points_distance(distance: float | None) -> int:
     return 5
 
 
+def points_distance_below(distance: float | None) -> int:
+    """Mirror of points_distance for price below the 200-day line.
+
+    ``distance`` is price/SMA200 - 1. A small gap under the line (early downtrend)
+    scores like a small gap above it does for longs. At or above the line scores 0.
+    """
+    if distance is None or distance >= 0:
+        return 0
+    return points_distance(-distance)
+
+
+def points_rs_inverted(excess: float | None, maximum: int | None = None) -> int:
+    """More negative excess vs the benchmark scores higher. Flat matches points_rs(0)."""
+    if excess is None:
+        return 0
+    return points_rs(-excess, maximum)
+
+
 def points_flag(ok: bool, points: int) -> int:
     return points if ok else 0
 
@@ -191,7 +211,50 @@ def build_score(
     rs1w: float | None,
     dollar: float | None,
     rs_label: str = "一星期相對 SPY",
+    below50: bool = False,
+    side: str = "long",
 ) -> tuple[int, list[dict]]:
+    if side == "short":
+        parts = [
+            {
+                "key": "dist200",
+                "label": "低於200天線的距離",
+                "points": points_distance_below(distance200),
+                "max": SCORE_MAX["dist200"],
+            },
+            {
+                "key": "below50",
+                "label": "低於50天線",
+                "points": points_flag(below50, SCORE_MAX["above50"]),
+                "max": SCORE_MAX["above50"],
+            },
+            {
+                "key": "slope50",
+                "label": "50天線向下",
+                "points": points_flag(slope50 is not None and slope50 < 0, SCORE_MAX["slope50"]),
+                "max": SCORE_MAX["slope50"],
+            },
+            {
+                "key": "slope200",
+                "label": "200天線向下",
+                "points": points_flag(slope200 is not None and slope200 < 0, SCORE_MAX["slope200"]),
+                "max": SCORE_MAX["slope200"],
+            },
+            {
+                "key": "rs1w",
+                "label": rs_label,
+                "points": points_rs_inverted(rs1w),
+                "max": SCORE_MAX["rs1w"],
+            },
+            {
+                "key": "liquidity",
+                "label": "流動性",
+                "points": points_liquidity(dollar),
+                "max": SCORE_MAX["liquidity"],
+            },
+        ]
+        total = sum(part["points"] for part in parts)
+        return min(100, total), parts
     parts = [
         {
             "key": "dist200",

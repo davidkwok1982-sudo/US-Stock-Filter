@@ -16,6 +16,7 @@ import {
   toneClass,
 } from "@/lib/format.ts"
 import { displayName, industryLabel } from "@/lib/filters.ts"
+import { stockHref } from "@/lib/market.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
 import type { ScreenRow, SortKey } from "@/lib/types.ts"
 
@@ -31,7 +32,7 @@ export function ScreenTable({
   onSort: (key: SortKey) => void
 }) {
   const navigate = useNavigate()
-  const { copy, market } = useScreen()
+  const { copy, market, side } = useScreen()
   const columns = [
     { key: "symbol" as const, label: "代號", tip: copy.symbolTip, align: "left" as const },
     { key: "name" as const, label: "名稱", tip: "公司名稱", align: "left" as const },
@@ -76,11 +77,11 @@ export function ScreenTable({
                 key={row.symbol}
                 className="cursor-pointer"
                 tabIndex={0}
-                onClick={() => openRow(navigate, row.symbol, copy.stockPath, copy.sessionKey)}
+                onClick={() => openRow(navigate, row.symbol, stockHref(copy, row.symbol, side), copy.sessionKey)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault()
-                    openRow(navigate, row.symbol, copy.stockPath, copy.sessionKey)
+                    openRow(navigate, row.symbol, stockHref(copy, row.symbol, side), copy.sessionKey)
                   }
                 }}
               >
@@ -109,7 +110,7 @@ export function ScreenTable({
           <li key={row.symbol}>
             <button
               type="button"
-              onClick={() => openRow(navigate, row.symbol, copy.stockPath, copy.sessionKey)}
+              onClick={() => openRow(navigate, row.symbol, stockHref(copy, row.symbol, side), copy.sessionKey)}
               className="w-full rounded-lg border border-border bg-card p-3 text-left"
             >
               <div className="flex items-baseline justify-between gap-3">
@@ -169,9 +170,9 @@ function ScoreMark({ score }: { score: number }) {
 function openRow(
   navigate: ReturnType<typeof useNavigate>,
   symbol: string,
-  stockPath: (symbol: string) => string,
+  href: string,
   sessionKey: string,
 ) {
   sessionStorage.setItem(sessionKey, symbol)
-  void navigate(stockPath(symbol))
+  void navigate(href)
 }

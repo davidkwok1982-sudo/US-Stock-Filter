@@ -1,5 +1,12 @@
 import type { Filters, ScreenRow, SortKey } from "./types.ts"
 
+export type Side = "long" | "short"
+
+export function readSide(params: URLSearchParams): Side {
+  const raw = params.get("side")
+  return raw === "short" || raw === "sell" ? "short" : "long"
+}
+
 /** Prefer zh industry label; fall back to EN. */
 export function industryLabel(row: ScreenRow): string {
   return (row.industry?.trim() || row.industryEn?.trim() || "")
@@ -46,17 +53,23 @@ export function readFilters(params: URLSearchParams): Filters {
     rs: params.get("rs") === "1",
     support: params.get("support") === "1" || params.get("retest") === "1",
     gain1w: parseGain1w(params.get("gain1w")),
+    drop1w: parseGain1w(params.get("drop1w")),
     sort: sort && SORTS.has(sort as SortKey) ? (sort as SortKey) : "score",
     dir: params.get("dir") === "asc" ? "asc" : "desc",
   }
 }
 
-export function writeFilters(filters: Filters): URLSearchParams {
+export function writeFilters(filters: Filters, side: Side = "long"): URLSearchParams {
   const params = new URLSearchParams()
+  if (side === "short") params.set("side", "short")
   if (filters.q.trim()) params.set("q", filters.q.trim())
   if (filters.rs) params.set("rs", "1")
   if (filters.support) params.set("support", "1")
-  if (filters.gain1w != null && Number.isFinite(filters.gain1w)) {
+  if (side === "short") {
+    if (filters.drop1w != null && Number.isFinite(filters.drop1w)) {
+      params.set("drop1w", String(filters.drop1w))
+    }
+  } else if (filters.gain1w != null && Number.isFinite(filters.gain1w)) {
     params.set("gain1w", String(filters.gain1w))
   }
   if (filters.sort !== "score") params.set("sort", filters.sort)
@@ -64,13 +77,25 @@ export function writeFilters(filters: Filters): URLSearchParams {
   return params
 }
 
-export function visibleRows(rows: ScreenRow[], filters: Filters): ScreenRow[] {
+export function visibleRows(rows: ScreenRow[], filters: Filters, side: Side = "long"): ScreenRow[] {
   const query = filters.q.trim().toLowerCase()
   const list = rows.filter((row) => {
     if (!row.passHard) return false
-    if (filters.rs && !(row.rsBeat && row.rsBeat20)) return false
-    if (filters.support && !row.closeAtSupport) return false
-    if (filters.gain1w != null) {
+    if (filters.rs) {
+      if (side === "short") {
+        if (!(row.rs1w != null && row.rs1w < 0 && row.rs20 != null && row.rs20 < 0)) return false
+      } else if (!(row.rsBeat && row.rsBeat20)) return false
+    }
+    if (filters.support) {
+      if (side === "short") {
+        if (!row.closeAtResistance) return false
+      } else if (!row.closeAtSupport) return false
+    }
+    if (side === "short") {
+      if (filters.drop1w != null) {
+        if (row.ret1w == null || !(row.ret1w <= -filters.drop1w / 100)) return false
+      }
+    } else if (filters.gain1w != null) {
       if (row.ret1w == null || !(row.ret1w >= filters.gain1w / 100)) return false
     }
     if (!query) return true

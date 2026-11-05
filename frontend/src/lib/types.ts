@@ -51,6 +51,14 @@ export type ScreenRow = {
   closeAtSupportTouches?: number | null
   closeAtSupportZoneLow?: number | null
   closeAtSupportZoneHigh?: number | null
+  closeAtResistance?: boolean
+  closeAtResistanceNote?: string | null
+  closeAtResistanceLevel?: number | null
+  closeAtResistanceTouches?: number | null
+  closeAtResistanceZoneLow?: number | null
+  closeAtResistanceZoneHigh?: number | null
+  slopeDown?: boolean
+  side?: "long" | "short"
   ret1w?: number | null
   ret20?: number | null
   ret3m: number | null
@@ -106,6 +114,7 @@ export type ScreenMeta = {
     microOrOtc: number
   }
   market?: string
+  side?: "long" | "short"
   hint?: string
   benchmark?: { symbol: string; label: string }
   spy?: {
@@ -231,8 +240,10 @@ export type Filters = {
   q: string
   rs: boolean
   support: boolean
-  /** Soft filter: keep rows with ret1w >= gain1w/100. null = off. */
+  /** Soft filter: keep rows with ret1w >= gain1w/100. null = off. Long mode. */
   gain1w: number | null
+  /** Soft filter: keep rows with ret1w <= -drop1w/100. null = off. Short mode. */
+  drop1w: number | null
   sort: SortKey
   dir: "asc" | "desc"
 }

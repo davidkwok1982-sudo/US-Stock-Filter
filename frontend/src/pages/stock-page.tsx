@@ -16,6 +16,7 @@ import {
   toneClass,
 } from "@/lib/format.ts"
 import { displayName } from "@/lib/filters.ts"
+import { stockHref } from "@/lib/market.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
 import type { ChartInterval, CompanyProfile, StockDetail } from "@/lib/types.ts"
 
@@ -33,7 +34,8 @@ function smaHint(interval: ChartInterval): string {
 
 export function StockPage() {
   const { symbol = "" } = useParams()
-  const { market, copy } = useScreen()
+  const { market, copy, side } = useScreen()
+  const short = side === "short"
   const [detail, setDetail] = useState<StockDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -58,13 +60,13 @@ export function StockPage() {
       loadedSymbolRef.current = ""
     }
     setError(null)
-    fetchStock(cleaned, chartInterval, market)
+    fetchStock(cleaned, chartInterval, market, side)
       .then((next) => {
         if (stop) return
         loadedSymbolRef.current = next.row.symbol
         setDetail(next)
         sessionStorage.setItem(copy.sessionKey, next.row.symbol)
-        document.title = `${copy.title} · ${next.row.symbol}`
+        document.title = `${short ? `${copy.title} · 短倉` : copy.title} · ${next.row.symbol}`
       })
       .catch((reason: unknown) => {
         if (!stop) setError(reason instanceof Error ? reason.message : "未能載入這隻股份")
@@ -78,7 +80,7 @@ export function StockPage() {
     return () => {
       stop = true
     }
-  }, [symbol, chartInterval, market, copy.sessionKey, copy.title])
+  }, [symbol, chartInterval, market, copy.sessionKey, copy.title, side, short])
 
   useEffect(() => {
     const cleaned = symbol.trim().toUpperCase()
@@ -165,7 +167,9 @@ export function StockPage() {
                     {label}
                   </Badge>
                 ))}
-                <Badge variant={row.passHard ? "default" : "secondary"}>{row.passHard ? "通過第二階段" : "未通過"}</Badge>
+                <Badge variant={row.passHard ? "default" : "secondary"}>
+                  {row.passHard ? (short ? "通過短倉條件" : "通過第二階段") : "未通過"}
+                </Badge>
               </div>
               <p className="mt-1 text-muted-foreground">
                 {displayName(row)}
@@ -224,7 +228,11 @@ export function StockPage() {
             )}
           </section>
 
-          {chartInterval === "1d" && row.closeAtSupport && row.closeAtSupportNote ? (
+          {chartInterval === "1d" && short && row.closeAtResistance && row.closeAtResistanceNote ? (
+            <p className="text-sm text-amber-700 dark:text-amber-400">{row.closeAtResistanceNote}</p>
+          ) : null}
+
+          {chartInterval === "1d" && !short && row.closeAtSupport && row.closeAtSupportNote ? (
             <p className="text-sm text-amber-700 dark:text-amber-400">
               {row.closeAtSupportNote}
               {typeof row.closeAtSupportZoneLow === "number" &&
@@ -265,12 +273,21 @@ export function StockPage() {
           </dl>
 
           <ul className="flex flex-wrap gap-2 text-sm">
-            <Gate label="價＞50＞150＞200" ok={!row.failCodes.includes("ma_stack") && (row.maStacked ?? row.aboveSma200)} />
-            <Gate label="均線向上" ok={!row.failCodes.includes("ma_slope") && row.slopeUp} />
+            <Gate
+              label={short ? "價＜50＜150＜200" : "價＞50＞150＞200"}
+              ok={!row.failCodes.includes("ma_stack") && (row.maStacked ?? (short ? false : row.aboveSma200))}
+            />
+            <Gate
+              label={short ? "均線向下" : "均線向上"}
+              ok={!row.failCodes.includes("ma_slope") && (short ? Boolean(row.slopeDown) : row.slopeUp)}
+            />
             <Gate label={copy.hardCapBlurb.replace("市值逾", "市值逾")} ok={!row.failCodes.includes("cap")} />
           </ul>
           {row.failReasons.length > 0 ? (
             <p className="text-sm text-muted-foreground">未過：{row.failReasons.join("、")}</p>
+          ) : null}
+          {short ? (
+            <p className="text-sm text-muted-foreground">短倉只做技術篩選，並非投資建議；港股不保證能借到券。</p>
           ) : null}
 
           <ResearchPromptCard symbol={row.symbol} />
@@ -367,7 +384,8 @@ export function StockPage() {
 }
 
 export function StockPicker() {
-  const { data, copy, market } = useScreen()
+  const { data, copy, market, side } = useScreen()
+  const short = side === "short"
   const [query, setQuery] = useState("")
   const rows = (data?.rows ?? []).filter((row) => row.passHard)
   const q = query.trim().toLowerCase()
@@ -376,8 +394,8 @@ export function StockPicker() {
     .slice(0, 12)
 
   useEffect(() => {
-    document.title = `${copy.title} · 個股詳情`
-  }, [copy.title])
+    document.title = `${short ? `${copy.title} · 短倉` : copy.title} · 個股詳情`
+  }, [copy.title, short])
 
   return (
     <div className="mx-auto max-w-lg py-8">
@@ -394,7 +412,7 @@ export function StockPicker() {
         {matches.map((row) => (
           <li key={row.symbol}>
             <Link
-              to={copy.stockPath(row.symbol)}
+              to={stockHref(copy, row.symbol, side)}
               className="flex items-baseline justify-between gap-3 py-3"
               onClick={() => sessionStorage.setItem(copy.sessionKey, row.symbol)}
             >

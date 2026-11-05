@@ -205,3 +205,59 @@ def merge_flagged_support(levels: list[dict], flagged: dict | None) -> list[dict
     others = [item for item in supports if item is not flagged_item]
     picked = [flagged_item] + others[:2]
     return sorted(picked, key=lambda entry: -entry["price"]) + resistance
+
+
+def merge_flagged_resistance(levels: list[dict], flagged: dict | None) -> list[dict]:
+    """Ensure the close-at-resistance level appears on the chart even if not top-3."""
+    if not flagged:
+        return levels
+    raw = flagged.get("price")
+    if raw is None:
+        return levels
+    price = round(float(raw), 2)
+    if price <= 0:
+        return levels
+    touches = int(flagged.get("touches") or 2)
+    label = "收市近阻力帶" if touches >= 3 else "收市近阻力"
+    atr = flagged.get("atr")
+    zone_low = flagged.get("zoneLow")
+    zone_high = flagged.get("zoneHigh")
+    if zone_low is None or zone_high is None:
+        if atr:
+            half = zone_half_width(price, float(atr))
+            zone_low = round(price - half, 2)
+            zone_high = round(price + half, 2)
+        else:
+            zone_low = price
+            zone_high = price
+
+    supports = [item for item in levels if item["kind"] == "support"]
+    resistance = [dict(item) for item in levels if item["kind"] == "resistance"]
+
+    for item in resistance:
+        if abs(item["price"] - price) / price < 0.015:
+            item["price"] = price
+            item["touches"] = max(int(item.get("touches") or 1), touches)
+            item["label"] = label
+            item["zoneLow"] = round(float(zone_low), 2)
+            item["zoneHigh"] = round(float(zone_high), 2)
+            if atr is not None:
+                item["atr"] = round(float(atr), 4)
+            return supports + sorted(resistance, key=lambda entry: entry["price"])
+
+    resistance.append(
+        {
+            "price": price,
+            "kind": "resistance",
+            "touches": touches,
+            "label": label,
+            "zoneLow": round(float(zone_low), 2),
+            "zoneHigh": round(float(zone_high), 2),
+            "atr": round(float(atr), 4) if atr is not None else None,
+        }
+    )
+    resistance = sorted(resistance, key=lambda entry: entry["price"])
+    flagged_item = next(item for item in resistance if abs(item["price"] - price) / price < 1e-9)
+    others = [item for item in resistance if item is not flagged_item]
+    picked = [flagged_item] + others[:2]
+    return supports + sorted(picked, key=lambda entry: entry["price"])

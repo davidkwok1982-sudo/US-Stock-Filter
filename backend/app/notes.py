@@ -49,6 +49,7 @@ def build_notes(
     benchmark_short: str = "SPY",
     currency: str = "USD",
     money_unit: str = "美元",
+    side: str = "long",
 ) -> dict:
     technical: list[str] = []
     price = row.get("price")
@@ -56,7 +57,25 @@ def build_notes(
     sma150 = row.get("sma150")
     sma50 = row.get("sma50")
 
-    if price and sma50 and sma150 and sma200:
+    if price and sma50 and sma150 and sma200 and side == "short":
+        stacked = price < sma50 < sma150 < sma200
+        slope_bits = "".join(
+            filter(
+                None,
+                [
+                    _slope_phrase("50天線", row.get("sma50Slope")),
+                    _slope_phrase("150天線", row.get("sma150Slope")),
+                    _slope_phrase("200天線", row.get("sma200Slope")),
+                ],
+            )
+        )
+        relation = "股價＜50＜150＜200" if stacked else "未呈股價＜50＜150＜200"
+        technical.append(
+            f"短倉技術篩選：現價 {_px(price, currency=currency)} {relation}"
+            f"（50 {_px(sma50, currency=currency)}、150 {_px(sma150, currency=currency)}、200 {_px(sma200, currency=currency)}）。"
+            f"{slope_bits}只供觀察，並非投資建議，亦不保證能借到券。"
+        )
+    elif price and sma50 and sma150 and sma200:
         stacked = price > sma50 > sma150 > sma200
         slope_bits = "".join(
             filter(

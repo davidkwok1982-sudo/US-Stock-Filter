@@ -78,6 +78,18 @@ Health: `GET /api/health`
 
 ---
 
+## 短倉（同一路徑）
+
+長倉與短倉共用現有頁面，不另開 `/short`。
+
+- 美股：`/?side=short`（省略 `side` 或 `side=long` 為長倉）
+- 港股：`/hk?side=short`
+- 策略說明跟著同一參數：`/strategy?side=short`、`/hk/strategy?side=short`
+- 個股仍是 `/stock/:symbol`、`/hk/stock/:symbol`，可加 `?side=short` 讓評語與硬性標籤跟短倉
+- API：`GET /api/screen?side=short`、`GET /api/hk/screen?side=short`（`sell` 同 `short`）
+- 短倉列存在快照的 `rowsShort`，與長倉 `rows` 分開；記憶體快取亦按 `side` 分開。第一次開短倉會用已下載的日線重算，不必先再抓 Yahoo。
+- 短倉是技術篩選，不是投資建議；港股不保證能借券。
+
 ## 港股篩選器（同站）
 
 - 前端路由：`/hk`、`/hk/stock/:symbol`、`/hk/strategy`（頂部 美股／港股 切換）。

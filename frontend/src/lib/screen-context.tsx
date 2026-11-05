@@ -1,25 +1,30 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
-import { useLocation } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 
 import { fetchScreen, postRefresh } from "./api.ts"
+import { readSide, type Side } from "./filters.ts"
 import { MARKETS, marketFromPath, type MarketCopy, type MarketId } from "./market.ts"
 import type { ScreenResponse } from "./types.ts"
 
 type ScreenContextValue = {
   market: MarketId
+  side: Side
   copy: MarketCopy
   data: ScreenResponse | null
   loadError: string | null
   refreshing: boolean
   refresh: () => Promise<void>
+  setSide: (side: Side) => void
 }
 
 const ScreenContext = createContext<ScreenContextValue | null>(null)
 
 export function ScreenProvider({ children }: { children: ReactNode }) {
   const location = useLocation()
+  const navigate = useNavigate()
   const market = marketFromPath(location.pathname)
+  const side = readSide(new URLSearchParams(location.search))
   const copy = MARKETS[market]
   const [data, setData] = useState<ScreenResponse | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -28,7 +33,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setData(null)
     setLoadError(null)
-  }, [market])
+  }, [market, side])
 
   useEffect(() => {
     let stop = false
@@ -36,7 +41,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
 
     async function tick() {
       try {
-        const next = await fetchScreen(market)
+        const next = await fetchScreen(market, side)
         if (stop) return
         setData(next)
         setLoadError(null)
@@ -57,7 +62,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
       stop = true
       window.clearTimeout(timer)
     }
-  }, [nonce, market])
+  }, [nonce, market, side])
 
   const refresh = useCallback(async () => {
     try {
@@ -76,16 +81,36 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
     }
   }, [market])
 
+  const setSide = useCallback(
+    (next: Side) => {
+      const params = new URLSearchParams(location.search)
+      if (next === "short") {
+        params.set("side", "short")
+        if (params.has("gain1w") && !params.has("drop1w")) params.set("drop1w", params.get("gain1w") ?? "")
+        params.delete("gain1w")
+      } else {
+        params.delete("side")
+        if (params.has("drop1w") && !params.has("gain1w")) params.set("gain1w", params.get("drop1w") ?? "")
+        params.delete("drop1w")
+      }
+      const search = params.toString()
+      navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true })
+    },
+    [location.pathname, location.search, navigate],
+  )
+
   const value = useMemo<ScreenContextValue>(
     () => ({
       market,
+      side,
       copy,
       data,
       loadError,
       refreshing: Boolean(data?.refresh.running),
       refresh,
+      setSide,
     }),
-    [market, copy, data, loadError, refresh],
+    [market, side, copy, data, loadError, refresh, setSide],
   )
 
   return <ScreenContext.Provider value={value}>{children}</ScreenContext.Provider>

@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.engine import cooldown_block, engine, engine_hk, engines
+from app.evaluate import normalize_side
 from app import screen_cache, store
 from app.strategies import STRATEGIES, get_strategy
 
@@ -79,25 +80,16 @@ def strategies():
     return {"strategies": STRATEGIES}
 
 
-@app.get("/api/screen")
-def screen(
-    request: Request,
-    strategy: str = "jlaw-stage2",
-    include: str = Query(default="pass", pattern="^(pass|all)$"),
-):
-    """Default: passHard rows + meta.summary. Pass ?include=all for the full universe."""
-    chosen = get_strategy(strategy)
-    if chosen is None:
-        raise HTTPException(status_code=404, detail="沒有這個策略")
-    if chosen["status"] != "active":
-        raise HTTPException(status_code=501, detail="此策略尚未推出")
-    refresh = engine.status()
+def _screen_response(request: Request, include: str, market: str, side: str):
+    """Serve long or short rows for one market. Cache keys include side."""
+    side = normalize_side(side)
+    eng = engines[market]
+    refresh = eng.status()
     accept_encoding = request.headers.get("accept-encoding")
-    # Hot path: warm pre-gzip cache → status() only (no SQLite / row scans).
-    cached_snap = screen_cache.get_cached_snapshot(market="us")
+    cached_snap = screen_cache.get_cached_snapshot(market=market, side=side)
     if cached_snap is not None and (
-        screen_cache.has_entry(include, market="us")
-        or (include == "all" and screen_cache.has_entry("pass", market="us"))
+        screen_cache.has_entry(include, market=market, side=side)
+        or (include == "all" and screen_cache.has_entry("pass", market=market, side=side))
     ):
         stale = store.is_stale(cached_snap)
         warm = screen_cache.try_warm_response(
@@ -105,14 +97,23 @@ def screen(
             refresh=refresh,
             stale=stale,
             accept_encoding=accept_encoding,
-            market="us",
+            market=market,
+            side=side,
         )
         if warm is not None:
             return warm
-    # Miss / empty after deploy / first request: load + backfill, then rebuild cache.
-    snapshot = engine.prepare_snapshot()
+    snapshot = eng.prepare_snapshot()
     if snapshot is None:
-        return {"ready": False, "stale": False, "meta": None, "rows": [], "refresh": refresh}
+        meta = None
+        if market == "hk":
+            meta = {
+                "market": "hk",
+                "side": side,
+                "hint": "港股快取尚未建立。Hobby 部署為臨時磁碟，請先按「重新整理」或呼叫 POST /api/hk/refresh。",
+            }
+        return {"ready": False, "stale": False, "meta": meta, "rows": [], "refresh": refresh}
+    if side == "short":
+        snapshot = eng.ensure_short_rows(snapshot)
     stale = store.is_stale(snapshot)
     return screen_cache.response(
         snapshot=snapshot,
@@ -120,8 +121,25 @@ def screen(
         stale=stale,
         include=include,
         accept_encoding=accept_encoding,
-        market="us",
+        market=market,
+        side=side,
     )
+
+
+@app.get("/api/screen")
+def screen(
+    request: Request,
+    strategy: str = "jlaw-stage2",
+    include: str = Query(default="pass", pattern="^(pass|all)$"),
+    side: str = Query(default="long", description="long or short. Same path; short inverts the Stage 2 gate."),
+):
+    """Default: passHard rows + meta.summary. Pass ?include=all for the full universe. ?side=short for the short screen."""
+    chosen = get_strategy(strategy)
+    if chosen is None:
+        raise HTTPException(status_code=404, detail="沒有這個策略")
+    if chosen["status"] != "active":
+        raise HTTPException(status_code=501, detail="此策略尚未推出")
+    return _screen_response(request, include, "us", side)
 
 
 @app.post("/api/refresh")
@@ -151,9 +169,13 @@ def stock_profile(symbol: str):
 
 
 @app.get("/api/stock/{symbol}")
-def stock(symbol: str, interval: str = Query(default="1d", description="Chart timeframe: 1d, 1wk, or 1h")):
+def stock(
+    symbol: str,
+    interval: str = Query(default="1d", description="Chart timeframe: 1d, 1wk, or 1h"),
+    side: str = Query(default="long"),
+):
     try:
-        return engine.detail(symbol, interval=interval)
+        return engine.detail(symbol, interval=interval, side=normalize_side(side))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except LookupError as exc:
@@ -161,59 +183,19 @@ def stock(symbol: str, interval: str = Query(default="1d", description="Chart ti
 
 
 
-def _hk_screen_response(request: Request, include: str):
-    refresh = engine_hk.status()
-    accept_encoding = request.headers.get("accept-encoding")
-    cached_snap = screen_cache.get_cached_snapshot(market="hk")
-    if cached_snap is not None and (
-        screen_cache.has_entry(include, market="hk")
-        or (include == "all" and screen_cache.has_entry("pass", market="hk"))
-    ):
-        stale = store.is_stale(cached_snap)
-        warm = screen_cache.try_warm_response(
-            include=include,
-            refresh=refresh,
-            stale=stale,
-            accept_encoding=accept_encoding,
-            market="hk",
-        )
-        if warm is not None:
-            return warm
-    snapshot = engine_hk.prepare_snapshot()
-    if snapshot is None:
-        return {
-            "ready": False,
-            "stale": False,
-            "meta": {
-                "market": "hk",
-                "hint": "港股快取尚未建立。Hobby 部署為臨時磁碟，請先按「重新整理」或呼叫 POST /api/hk/refresh。",
-            },
-            "rows": [],
-            "refresh": refresh,
-        }
-    stale = store.is_stale(snapshot)
-    return screen_cache.response(
-        snapshot=snapshot,
-        refresh=refresh,
-        stale=stale,
-        include=include,
-        accept_encoding=accept_encoding,
-        market="hk",
-    )
-
-
 @app.get("/api/hk/screen")
 def hk_screen(
     request: Request,
     strategy: str = "jlaw-stage2",
     include: str = Query(default="pass", pattern="^(pass|all)$"),
+    side: str = Query(default="long", description="long or short. Same /hk path; short inverts the Stage 2 gate."),
 ):
     chosen = get_strategy(strategy)
     if chosen is None:
         raise HTTPException(status_code=404, detail="沒有這個策略")
     if chosen["status"] != "active":
         raise HTTPException(status_code=501, detail="此策略尚未推出")
-    return _hk_screen_response(request, include)
+    return _screen_response(request, include, "hk", side)
 
 
 @app.post("/api/hk/refresh")
@@ -241,9 +223,13 @@ def hk_stock_profile(symbol: str):
 
 
 @app.get("/api/hk/stock/{symbol}")
-def hk_stock(symbol: str, interval: str = Query(default="1d", description="Chart timeframe: 1d, 1wk, or 1h")):
+def hk_stock(
+    symbol: str,
+    interval: str = Query(default="1d", description="Chart timeframe: 1d, 1wk, or 1h"),
+    side: str = Query(default="long"),
+):
     try:
-        return engine_hk.detail(symbol, interval=interval)
+        return engine_hk.detail(symbol, interval=interval, side=normalize_side(side))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except LookupError as exc:

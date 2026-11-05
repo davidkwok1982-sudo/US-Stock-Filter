@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.close_at_support import detect_close_at_support
+from app.close_at_support import detect_close_at_resistance, detect_close_at_support
 from app.labels import group_labels, industry_zh, sector_zh
 from app.metrics import (
     HIGH_DAYS,
@@ -33,6 +33,21 @@ FAILS = {
     "type": "非普通股",
 }
 
+FAILS_SHORT = {
+    "ma_stack": "股價＜50＜150＜200",
+    "ma_slope": "均線未全部向下",
+    "cap": FAILS["cap"],
+    "otc": FAILS["otc"],
+    "type": FAILS["type"],
+}
+
+
+def normalize_side(side: str | None) -> str:
+    """Long is the default. ``sell`` is accepted as an alias of ``short``."""
+    if side in ("short", "sell"):
+        return "short"
+    return "long"
+
 
 def _closes(bars: list[dict]) -> dict[str, float]:
     return {bar["time"]: bar["close"] for bar in bars}
@@ -50,7 +65,10 @@ def evaluate(
     apply_otc_gate: bool = True,
     cap_fail_label: str | None = None,
     rs_label: str | None = None,
+    side: str = "long",
+    detect_levels: bool = True,
 ) -> dict:
+    side = normalize_side(side)
     quote = quote or {}
     bars = bars or []
     closes = [bar["close"] for bar in bars]
@@ -115,23 +133,40 @@ def evaluate(
     industry_en = base.get("industry") or quote.get("industry")
 
     fail_codes: list[str] = []
-    stack_ok = (
-        price is not None
-        and sma50 is not None
-        and sma150 is not None
-        and sma200 is not None
-        and price > sma50 > sma150 > sma200
-    )
+    if side == "short":
+        stack_ok = (
+            price is not None
+            and sma50 is not None
+            and sma150 is not None
+            and sma200 is not None
+            and price < sma50 < sma150 < sma200
+        )
+        slopes_ok = (
+            slope50 is not None
+            and slope50 < 0
+            and slope150 is not None
+            and slope150 < 0
+            and slope200 is not None
+            and slope200 < 0
+        )
+    else:
+        stack_ok = (
+            price is not None
+            and sma50 is not None
+            and sma150 is not None
+            and sma200 is not None
+            and price > sma50 > sma150 > sma200
+        )
+        slopes_ok = (
+            slope50 is not None
+            and slope50 > 0
+            and slope150 is not None
+            and slope150 > 0
+            and slope200 is not None
+            and slope200 > 0
+        )
     if not stack_ok:
         fail_codes.append("ma_stack")
-    slopes_ok = (
-        slope50 is not None
-        and slope50 > 0
-        and slope150 is not None
-        and slope150 > 0
-        and slope200 is not None
-        and slope200 > 0
-    )
     if not slopes_ok:
         fail_codes.append("ma_slope")
     cap_floor = MIN_MARKET_CAP if min_market_cap is None else min_market_cap
@@ -151,19 +186,45 @@ def evaluate(
         or (price is not None and price < penny_floor)
     )
     above50 = bool(price and sma50 and price > sma50)
+    below50 = bool(price and sma50 and price < sma50)
     above200 = bool(price and sma200 and price > sma200)
     stacked = bool(stack_ok)
-    slope_up = bool(slopes_ok)
+    slope_up = bool(
+        slope50 is not None
+        and slope50 > 0
+        and slope150 is not None
+        and slope150 > 0
+        and slope200 is not None
+        and slope200 > 0
+    )
+    slope_down = bool(
+        slope50 is not None
+        and slope50 < 0
+        and slope150 is not None
+        and slope150 < 0
+        and slope200 is not None
+        and slope200 < 0
+    )
     near_high = bool(drawdown is not None and drawdown >= -NEAR_HIGH_WITHIN)
-    close_at_support, close_at_support_note, close_at_support_level = detect_close_at_support(bars)
+    if detect_levels and side == "short":
+        close_at_resistance, close_at_resistance_note, close_at_resistance_level = detect_close_at_resistance(bars)
+        close_at_support, close_at_support_note, close_at_support_level = False, None, None
+    elif detect_levels:
+        close_at_support, close_at_support_note, close_at_support_level = detect_close_at_support(bars)
+        close_at_resistance, close_at_resistance_note, close_at_resistance_level = False, None, None
+    else:
+        close_at_support, close_at_support_note, close_at_support_level = False, None, None
+        close_at_resistance, close_at_resistance_note, close_at_resistance_level = False, None, None
     score, parts = build_score(
         distance200=distance200,
         above50=above50,
+        below50=below50,
         slope50=slope50,
         slope200=slope200,
         rs1w=rs1w,
         dollar=dollar,
         rs_label=rs_label or "一星期相對 SPY",
+        side=side,
     )
     groups = list(base.get("groups") or [])
     name = quote.get("name") or base.get("name") or base.get("symbol")
@@ -194,8 +255,10 @@ def evaluate(
         "sma200Slope": slope200,
         "aboveSma50": above50,
         "aboveSma200": above200,
+        "side": side,
         "maStacked": stacked,
         "slopeUp": slope_up,
+        "slopeDown": slope_down,
         "high52": _round(high52),
         "low52": _round(low52),
         "pctFromHigh": drawdown,
@@ -218,6 +281,24 @@ def evaluate(
             if close_at_support_level and close_at_support_level.get("zoneHigh") is not None
             else None
         ),
+        "closeAtResistance": close_at_resistance,
+        "closeAtResistanceNote": close_at_resistance_note,
+        "closeAtResistanceLevel": (
+            round(close_at_resistance_level["price"], 2) if close_at_resistance_level else None
+        ),
+        "closeAtResistanceTouches": (
+            int(close_at_resistance_level["touches"]) if close_at_resistance_level else None
+        ),
+        "closeAtResistanceZoneLow": (
+            round(close_at_resistance_level["zoneLow"], 2)
+            if close_at_resistance_level and close_at_resistance_level.get("zoneLow") is not None
+            else None
+        ),
+        "closeAtResistanceZoneHigh": (
+            round(close_at_resistance_level["zoneHigh"], 2)
+            if close_at_resistance_level and close_at_resistance_level.get("zoneHigh") is not None
+            else None
+        ),
         "ret1w": ret1w,
         "ret20": ret20,
         "ret3m": ret3,
@@ -233,7 +314,7 @@ def evaluate(
         "scoreParts": parts,
         "passHard": not fail_codes,
         "failReasons": [
-            (cap_fail_label if code == "cap" and cap_fail_label else FAILS[code])
+            (cap_fail_label if code == "cap" and cap_fail_label else (FAILS_SHORT if side == "short" else FAILS)[code])
             for code in fail_codes
         ],
         "failCodes": fail_codes,
@@ -246,6 +327,21 @@ def evaluate(
     if name_zh:
         result["nameZh"] = name_zh
     return result
+
+
+def apply_close_at_resistance(row: dict, bars: list[dict] | None) -> None:
+    """Fill resistance fields on a short row. Used when bulk evaluate skipped level detection."""
+    matched, note, flagged = detect_close_at_resistance(bars or [])
+    row["closeAtResistance"] = matched
+    row["closeAtResistanceNote"] = note
+    row["closeAtResistanceLevel"] = round(flagged["price"], 2) if flagged else None
+    row["closeAtResistanceTouches"] = int(flagged["touches"]) if flagged else None
+    row["closeAtResistanceZoneLow"] = (
+        round(flagged["zoneLow"], 2) if flagged and flagged.get("zoneLow") is not None else None
+    )
+    row["closeAtResistanceZoneHigh"] = (
+        round(flagged["zoneHigh"], 2) if flagged and flagged.get("zoneHigh") is not None else None
+    )
 
 
 def _round(value: float | None) -> float | None:

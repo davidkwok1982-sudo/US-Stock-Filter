@@ -2,8 +2,9 @@ import { NavLink, Outlet, useLocation } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import { formatHongKongTime, formatMarketDate } from "@/lib/format.ts"
-import { MARKETS, type MarketId } from "@/lib/market.ts"
+import { MARKETS, strategyHref, type MarketId } from "@/lib/market.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
+import type { Side } from "@/lib/filters.ts"
 
 function navClass(active: boolean): string {
   return active
@@ -18,16 +19,18 @@ function marketTabClass(active: boolean): string {
 }
 
 export function Layout() {
-  const { data, refresh, refreshing, copy, market } = useScreen()
+  const { data, refresh, refreshing, copy, market, side, setSide } = useScreen()
   const location = useLocation()
   const marketDate = data?.meta?.marketDate
   const refreshed = data?.meta?.refreshedAt
-  const home = copy.basePath || "/"
-  const stockTarget = stockLink(location.pathname, market, copy.sessionKey)
+  const home = withSearch(copy.basePath || "/", location.search)
+  const stockTarget = withSearch(stockLink(location.pathname, market, copy.sessionKey), location.search)
+  const heading = side === "short" ? `${copy.title} · 短倉` : copy.title
+  const subtitle = side === "short" ? "短倉技術篩選 · 非投資建議" : copy.subtitle
   const links = [
     { to: home, label: "篩選結果", end: true },
     { to: stockTarget, label: "個股詳情", end: false },
-    { to: `${copy.basePath}/strategy`, label: "策略說明", end: true },
+    { to: withSearch(strategyHref(copy, "long"), location.search), label: "策略說明", end: true },
   ]
 
   return (
@@ -35,8 +38,8 @@ export function Layout() {
       <header className="sticky top-0 z-40 border-b border-foreground bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
           <NavLink to={home} className="min-w-0 shrink-0">
-            <span className="font-heading text-3xl leading-none font-semibold tracking-wide">{copy.title}</span>
-            <span className="mt-1 block text-[11px] tracking-[0.18em] text-muted-foreground">{copy.subtitle}</span>
+            <span className="font-heading text-3xl leading-none font-semibold tracking-wide">{heading}</span>
+            <span className="mt-1 block text-[11px] tracking-[0.18em] text-muted-foreground">{subtitle}</span>
           </NavLink>
           <div className="ml-2 flex shrink-0 overflow-hidden rounded-md border border-border" role="group" aria-label="市場">
             {(["us", "hk"] as MarketId[]).map((id) => {
@@ -45,11 +48,27 @@ export function Layout() {
               return (
                 <NavLink
                   key={id}
-                  to={m.basePath || "/"}
+                  to={withSearch(m.basePath || "/", location.search)}
                   className={`px-2.5 py-1 text-xs font-medium ${marketTabClass(active)}`}
                 >
                   {id === "us" ? "美股" : "港股"}
                 </NavLink>
+              )
+            })}
+          </div>
+          <div className="flex shrink-0 overflow-hidden rounded-md border border-border" role="group" aria-label="長倉或短倉">
+            {(["long", "short"] as Side[]).map((id) => {
+              const active = side === id
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setSide(id)}
+                  className={`px-2.5 py-1 text-xs font-medium ${marketTabClass(active)}`}
+                >
+                  {id === "long" ? "長倉" : "短倉"}
+                </button>
               )
             })}
           </div>
@@ -104,6 +123,12 @@ export function Layout() {
       </nav>
     </div>
   )
+}
+
+function withSearch(pathname: string, search: string): string {
+  if (!search) return pathname
+  const query = search.startsWith("?") ? search : `?${search}`
+  return `${pathname}${query}`
 }
 
 function stockLink(pathname: string, market: MarketId, sessionKey: string): string {

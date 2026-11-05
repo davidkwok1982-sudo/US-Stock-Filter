@@ -1,3 +1,4 @@
+import type { Side } from "./filters.ts"
 import type { MarketId } from "./market.ts"
 import { MARKETS } from "./market.ts"
 import type { ChartInterval, CompanyProfile, ScreenResponse, ScreenRow, StockDetail } from "./types.ts"
@@ -16,8 +17,9 @@ function prefix(market: MarketId): string {
   return MARKETS[market].apiPrefix
 }
 
-export async function fetchScreen(market: MarketId = "us"): Promise<ScreenResponse> {
-  const response = await fetch(`${prefix(market)}/screen`)
+export async function fetchScreen(market: MarketId = "us", side: Side = "long"): Promise<ScreenResponse> {
+  const query = side === "short" ? "?side=short" : ""
+  const response = await fetch(`${prefix(market)}/screen${query}`)
   if (!response.ok) throw new Error(await readError(response, "篩選暫時未能載入"))
   return response.json() as Promise<ScreenResponse>
 }
@@ -26,9 +28,11 @@ export async function fetchStock(
   symbol: string,
   interval: ChartInterval = "1d",
   market: MarketId = "us",
+  side: Side = "long",
 ): Promise<StockDetail> {
   const params = new URLSearchParams()
   if (interval && interval !== "1d") params.set("interval", interval)
+  if (side === "short") params.set("side", "short")
   const query = params.toString()
   const url = `${prefix(market)}/stock/${encodeURIComponent(symbol)}${query ? `?${query}` : ""}`
   const response = await fetch(url)
