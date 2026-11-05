@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from app.metrics import MIN_MARKET_CAP as US_MIN_MARKET_CAP
 
 # Yahoo returns marketCap for .HK equities in HKD in practice.
-# US floor is US$2B ≈ HK$15B at ~7.5 HKD/USD — use HK$15B as the HK hard floor.
-HK_MIN_MARKET_CAP = 15_000_000_000
+# Hard floor: HK$100億 = 100 × 1e8 = 10_000_000_000 (NOT 100e9 / 1000億).
+HK_MIN_MARKET_CAP = 10_000_000_000
 HK_MICRO_CAP = 1_000_000_000
 HK_PENNY_PRICE = 0.5
 
@@ -68,11 +68,11 @@ HK_MARKET = MarketConfig(
     min_market_cap=float(HK_MIN_MARKET_CAP),
     micro_cap=float(HK_MICRO_CAP),
     penny_price=float(HK_PENNY_PRICE),
-    cap_fail_label="市值不足150億港元或未明",
+    cap_fail_label="市值不足100億港元或未明",
     market_cap_currency="HKD",
     money_unit="港元",
     market_cap_note=(
-        "市值門檻 150 億港元（約等同美股 20 億美元精神門檻）。"
+        "市值門檻 100 億港元（Yahoo marketCap，港元；1 億=1e8，故 100 億=1e10）。"
         "Yahoo 對 .HK 普通股的 marketCap 通常以港元計；本站按港元直接比較，不作即時匯率換算。"
     ),
     rs_score_label="一星期相對恆指",

@@ -67,7 +67,7 @@ export const MARKETS: Record<MarketId, MarketCopy> = {
     footerSource: "資料來源：香港交易所證券名單 · Yahoo Finance 公開行情。",
     symbolTip: "港股代號（如 0700.HK）",
     rsColumnTip: "近約5個交易日回報減恆指",
-    hardCapBlurb: "市值逾150億港元",
+    hardCapBlurb: "市值逾100億港元",
     strategyIntro:
       "本站按以下七步篩選港股：先鎖定 Stage 2，再收緊市值與流動性、相對強度（對比恆指）、領導板塊、升勢早期程度、近一星期升幅，以及是否靠近支持位。",
     scoreRsLabel: "一星期相對恆指",
