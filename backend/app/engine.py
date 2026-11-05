@@ -320,6 +320,10 @@ class Engine:
             item.pop("beta", None)
             item.pop("betaBasis", None)
             slim.append(item)
+        if self.mid == "hk":
+            from app.universe_hk import apply_name_zh
+
+            apply_name_zh(slim)
         return {
             "ready": True,
             "stale": store.is_stale(snapshot),
@@ -491,6 +495,10 @@ class Engine:
             )
             if matched and flagged:
                 levels = merge_flagged_support(levels, flagged)
+        if self.mid == "hk":
+            from app.universe_hk import apply_name_zh
+
+            apply_name_zh([detail_row])
         notes = build_notes(
             detail_row,
             levels,

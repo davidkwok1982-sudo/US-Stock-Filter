@@ -15,7 +15,7 @@ import {
   formatMoneyLabeled,
   toneClass,
 } from "@/lib/format.ts"
-import { industryLabel } from "@/lib/filters.ts"
+import { displayName, industryLabel } from "@/lib/filters.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
 import type { ScreenRow, SortKey } from "@/lib/types.ts"
 
@@ -85,7 +85,7 @@ export function ScreenTable({
                 }}
               >
                 <TableCell className="font-medium">{row.symbol}</TableCell>
-                <TableCell className="max-w-48 truncate text-muted-foreground">{row.name}</TableCell>
+                <TableCell className="max-w-48 truncate text-muted-foreground">{displayName(row)}</TableCell>
                 <TableCell className="max-w-40 truncate text-muted-foreground">
                   {industryLabel(row) || "—"}
                 </TableCell>
@@ -115,7 +115,7 @@ export function ScreenTable({
               <div className="flex items-baseline justify-between gap-3">
                 <div>
                   <span className="font-medium">{row.symbol}</span>
-                  <span className="ml-2 text-sm text-muted-foreground">{row.name}</span>
+                  <span className="ml-2 text-sm text-muted-foreground">{displayName(row)}</span>
                 </div>
                 <ScoreMark score={row.score} />
               </div>

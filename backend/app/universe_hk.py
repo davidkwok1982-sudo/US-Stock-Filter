@@ -3,6 +3,11 @@
 Source XLS:
 https://www.hkex.com.hk/eng/services/trading/securities/securitieslists/ListOfSecurities.xlsx
 
+Traditional Chinese short names (keyless JSON):
+https://www1.hkexnews.hk/ncms/script/eds/activestock_sehk_c.json
+Items like {"c":"00700","n":"騰訊控股",...} — c is 5-digit code, n is TC short name.
+Mapped to Yahoo as XXXX.HK via last 4 digits / zfill (00001→0001.HK, 00700→0700.HK).
+
 Keeps ordinary Equity Securities on Main Board / GEM. Excludes ETFs, warrants,
 CBBCs, rights, bonds/debt, REITs, depositary receipts, investment companies,
 and trading-only names when identifiable from Category / Sub-Category.
@@ -13,19 +18,24 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import re
+import threading
 from datetime import datetime, timezone
-from pathlib import Path
 
 import httpx
 from openpyxl import load_workbook
 
 from app.config import DATA_DIR, USER_AGENT
 
+log = logging.getLogger("kailut")
+
 HKEX_LIST_URL = (
     "https://www.hkex.com.hk/eng/services/trading/securities/securitieslists/ListOfSecurities.xlsx"
 )
+HKEX_ZH_NAMES_URL = "https://www1.hkexnews.hk/ncms/script/eds/activestock_sehk_c.json"
 UNIVERSE_PATH = DATA_DIR / "universe_hk.json"
+NAMES_ZH_PATH = DATA_DIR / "hk_names_zh.json"
 
 KEEP_SUB = frozenset(
     {
@@ -51,6 +61,9 @@ EXCLUDE_NAME_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
+
+_zh_lock = threading.Lock()
+_zh_map: dict[str, str] | None = None
 
 
 def to_yahoo(stock_code: str) -> str | None:
@@ -115,6 +128,120 @@ def parse_list_of_securities(content: bytes) -> list[dict]:
     return rows
 
 
+def parse_zh_names(payload: list | dict) -> dict[str, str]:
+    """Map Yahoo symbol → Traditional Chinese short name from HKEXnews JSON."""
+    items = payload if isinstance(payload, list) else payload.get("data") or payload.get("table") or []
+    out: dict[str, str] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("n") or "").strip()
+        yahoo = to_yahoo(str(item.get("c") or ""))
+        if not yahoo or not name:
+            continue
+        out[yahoo] = name
+    return out
+
+
+def fetch_zh_name_map() -> dict[str, str]:
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json,*/*",
+    }
+    with httpx.Client(headers=headers, timeout=60.0, follow_redirects=True) as client:
+        response = client.get(HKEX_ZH_NAMES_URL)
+        response.raise_for_status()
+        payload = response.json()
+    mapping = parse_zh_names(payload)
+    if len(mapping) < 500:
+        raise RuntimeError(f"港股中文名稱過少（{len(mapping)}），拒絕覆寫")
+    return mapping
+
+
+def save_zh_name_map(mapping: dict[str, str]) -> None:
+    NAMES_ZH_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "asOf": datetime.now(timezone.utc).date().isoformat(),
+        "source": "hkexnews-activestock-sehk-c",
+        "names": mapping,
+    }
+    NAMES_ZH_PATH.write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+
+
+def _read_zh_name_map_file() -> dict[str, str]:
+    if not NAMES_ZH_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(NAMES_ZH_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    names = payload.get("names") if isinstance(payload, dict) else None
+    if isinstance(names, dict):
+        return {str(k): str(v) for k, v in names.items() if k and v}
+    return {}
+
+
+def refresh_zh_name_map() -> dict[str, str]:
+    """Fetch HKEXnews TC names, persist, and update the in-memory cache."""
+    global _zh_map
+    mapping = fetch_zh_name_map()
+    save_zh_name_map(mapping)
+    with _zh_lock:
+        _zh_map = mapping
+    log.info("HK Chinese name map refreshed count=%s", len(mapping))
+    return mapping
+
+
+def load_zh_name_map(*, refresh: bool = False) -> dict[str, str]:
+    """Return symbol→nameZh map. Prefer memory, then disk; optionally refresh from HKEXnews."""
+    global _zh_map
+    if refresh:
+        try:
+            return refresh_zh_name_map()
+        except Exception:
+            log.exception("HK Chinese name refresh failed; falling back to cache")
+    with _zh_lock:
+        if _zh_map is not None:
+            return _zh_map
+    cached = _read_zh_name_map_file()
+    if cached:
+        with _zh_lock:
+            _zh_map = cached
+        return cached
+    try:
+        return refresh_zh_name_map()
+    except Exception:
+        log.exception("HK Chinese name map unavailable")
+        with _zh_lock:
+            _zh_map = {}
+        return {}
+
+
+def apply_name_zh(rows: list[dict], name_map: dict[str, str] | None = None) -> list[dict]:
+    """Stamp nameZh onto each row from the cached HKEXnews map (in-place)."""
+    if not rows:
+        return rows
+    mapping = name_map if name_map is not None else load_zh_name_map()
+    if not mapping:
+        return rows
+    for row in rows:
+        symbol = row.get("symbol")
+        if not symbol:
+            continue
+        zh = mapping.get(symbol)
+        if zh:
+            row["nameZh"] = zh
+    return rows
+
+
+def attach_zh_names(rows: list[dict], *, refresh: bool = False) -> list[dict]:
+    """Join Chinese short names onto universe / screen rows."""
+    return apply_name_zh(rows, load_zh_name_map(refresh=refresh))
+
+
 def fetch_universe() -> list[dict]:
     headers = {
         "User-Agent": USER_AGENT,
@@ -126,7 +253,13 @@ def fetch_universe() -> list[dict]:
         content = response.content
     if content[:2] != b"PK":
         raise RuntimeError("HKEX 證券名單不是有效的 XLSX")
-    return parse_list_of_securities(content)
+    rows = parse_list_of_securities(content)
+    try:
+        attach_zh_names(rows, refresh=True)
+    except Exception:
+        log.exception("attaching HK Chinese names during universe fetch failed")
+        attach_zh_names(rows, refresh=False)
+    return rows
 
 
 def save_universe(rows: list[dict]) -> None:
@@ -143,7 +276,9 @@ def load_fallback() -> list[dict]:
     if not UNIVERSE_PATH.exists():
         return []
     payload = json.loads(UNIVERSE_PATH.read_text(encoding="utf-8"))
-    return payload.get("symbols") or []
+    rows = payload.get("symbols") or []
+    attach_zh_names(rows, refresh=False)
+    return rows
 
 
 def load_universe() -> tuple[list[dict], str]:

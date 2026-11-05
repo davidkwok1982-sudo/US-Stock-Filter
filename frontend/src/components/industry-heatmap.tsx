@@ -2,6 +2,7 @@ import { useMemo, type CSSProperties } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { displayName } from "@/lib/filters.ts"
 import { formatPct, toneClass } from "@/lib/format.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
 import { cn } from "@/lib/utils.ts"
@@ -261,7 +262,7 @@ function IndustryBlock({
       >
         {bucket.rows.map((row) => {
           const board = boardLabel(row)
-          const name = shortName(row.name)
+          const name = shortName(displayName(row))
           return (
             <li key={row.symbol}>
               <Tooltip>
@@ -306,7 +307,7 @@ function IndustryBlock({
                 <TooltipContent className="flex-col items-start gap-0.5 py-2">
                   <span className="font-medium">
                     {row.symbol}
-                    {row.name ? ` · ${row.name}` : ""}
+                    {displayName(row) ? ` · ${displayName(row)}` : ""}
                   </span>
                   <span>版塊：{board}</span>
                   <span className="text-background/80">評分 {row.score} · 一星期 RS {formatPct(row.rs1w ?? row.rs6m)}</span>

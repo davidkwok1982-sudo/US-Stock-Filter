@@ -83,6 +83,7 @@ Health: `GET /api/health`
 - 前端路由：`/hk`、`/hk/stock/:symbol`、`/hk/strategy`（頂部 美股／港股 切換）。
 - API：`GET /api/hk/screen`、`POST /api/hk/refresh`、`GET /api/hk/stock/{symbol}`、`GET /api/hk/stock/{symbol}/profile`。
 - 股票池：HKEX List of Securities → `XXXX.HK`；快取 `universe_hk.json` + `market_hk.sqlite`（與美股分開）。
+- 繁中簡稱：HKEXnews `activestock_sehk_c.json` → `nameZh`（快取 `hk_names_zh.json`）。`/api/hk/screen` 在回應時合併名稱，舊快照無需全量重篩亦可顯示；刷新股票池時會一併更新名稱圖。
 - 基準：恆生指數 `^HSI`；軟籌碼「跑贏恆指」需約 5 日與 20 日 RS 皆為正。
 - 市值硬門檻：**HK$100 億**（= 10_000_000_000；Yahoo `.HK` marketCap 通常為港元）。
 - Hobby 部署磁碟為臨時：港股冷啟動**不會**自動全量刷新，請按頁面「重新整理」或 `POST /api/hk/refresh`。首次下載全市場需時較長。

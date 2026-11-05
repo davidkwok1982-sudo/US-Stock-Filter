@@ -15,6 +15,8 @@ export type ScorePart = {
 export type ScreenRow = {
   symbol: string
   name: string
+  /** Traditional Chinese short name (HK); prefer for display when present. */
+  nameZh?: string | null
   exchange: string | null
   groups: string[]
   groupLabels: string[]

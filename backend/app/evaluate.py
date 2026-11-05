@@ -169,7 +169,7 @@ def evaluate(
     name = quote.get("name") or base.get("name") or base.get("symbol")
     incomplete = len(bars) < SMA_SLOW or sma200 is None
 
-    return {
+    result = {
         "symbol": base["symbol"],
         "name": name,
         "exchange": exchange_name or exchange,
@@ -242,6 +242,10 @@ def evaluate(
         "incomplete": incomplete,
         "barsCount": len(bars),
     }
+    name_zh = base.get("nameZh")
+    if name_zh:
+        result["nameZh"] = name_zh
+    return result
 
 
 def _round(value: float | None) -> float | None:

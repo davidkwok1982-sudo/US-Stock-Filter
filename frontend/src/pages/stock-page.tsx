@@ -15,6 +15,7 @@ import {
   formatMoneyLabeled,
   toneClass,
 } from "@/lib/format.ts"
+import { displayName } from "@/lib/filters.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
 import type { ChartInterval, CompanyProfile, StockDetail } from "@/lib/types.ts"
 
@@ -167,7 +168,10 @@ export function StockPage() {
                 <Badge variant={row.passHard ? "default" : "secondary"}>{row.passHard ? "通過第二階段" : "未通過"}</Badge>
               </div>
               <p className="mt-1 text-muted-foreground">
-                {row.name}
+                {displayName(row)}
+                {row.nameZh && row.name && row.nameZh !== row.name ? (
+                  <span className="ml-2 text-xs opacity-70">{row.name}</span>
+                ) : null}
                 {row.exchange ? ` · ${row.exchange}` : ""}
               </p>
             </div>
@@ -366,7 +370,7 @@ export function StockPicker() {
   const rows = (data?.rows ?? []).filter((row) => row.passHard)
   const q = query.trim().toLowerCase()
   const matches = rows
-    .filter((row) => !q || row.symbol.toLowerCase().includes(q) || row.name.toLowerCase().includes(q))
+    .filter((row) => !q || row.symbol.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || (row.nameZh?.toLowerCase().includes(q) ?? false))
     .slice(0, 12)
 
   useEffect(() => {
@@ -394,7 +398,7 @@ export function StockPicker() {
             >
               <span>
                 <span className="font-medium">{row.symbol}</span>
-                <span className="ml-2 text-sm text-muted-foreground">{row.name}</span>
+                <span className="ml-2 text-sm text-muted-foreground">{displayName(row)}</span>
               </span>
               <span className="num text-sm">{row.score}</span>
             </Link>

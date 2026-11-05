@@ -111,12 +111,27 @@ def _slim_row(row: dict) -> dict:
     return item
 
 
-def _build_payload(snapshot: dict, *, include_all: bool, refresh: dict, stale: bool) -> dict:
+def _build_payload(
+    snapshot: dict,
+    *,
+    include_all: bool,
+    refresh: dict,
+    stale: bool,
+    market: str = "us",
+) -> dict:
     rows = snapshot.get("rows") or []
     if include_all:
         slim = [_slim_row(row) for row in rows]
     else:
         slim = [_slim_row(row) for row in rows if row.get("passHard")]
+    # Serve-time merge so old HK snapshots still get TC short names after redeploy.
+    if market == "hk":
+        try:
+            from app.universe_hk import apply_name_zh
+
+            apply_name_zh(slim)
+        except Exception:
+            log.exception("HK nameZh serve-time merge failed")
     return {
         "ready": True,
         "stale": stale,
@@ -137,7 +152,7 @@ def rebuild(snapshot: dict | None, refresh: dict, stale: bool, market: str = "us
     if snapshot is None:
         invalidate(market=market)
         return
-    pass_payload = _build_payload(snapshot, include_all=False, refresh=refresh, stale=stale)
+    pass_payload = _build_payload(snapshot, include_all=False, refresh=refresh, stale=stale, market=market)
     pass_raw, pass_gz = _encode(pass_payload)
     with _lock:
         bucket = _bucket(market)
@@ -158,7 +173,7 @@ def rebuild(snapshot: dict | None, refresh: dict, stale: bool, market: str = "us
 
 
 def _rebuild_all(snapshot: dict, refresh: dict, stale: bool, market: str = "us") -> dict[str, object]:
-    all_payload = _build_payload(snapshot, include_all=True, refresh=refresh, stale=stale)
+    all_payload = _build_payload(snapshot, include_all=True, refresh=refresh, stale=stale, market=market)
     all_raw, all_gz = _encode(all_payload)
     entry = {
         "raw": all_raw,
@@ -228,7 +243,7 @@ def response(
     entry = _ensure(snapshot, refresh, stale, include, market=market)
     if entry is None:
         # Should not happen; fall back to building once.
-        payload = _build_payload(snapshot, include_all=(include == "all"), refresh=refresh, stale=stale)
+        payload = _build_payload(snapshot, include_all=(include == "all"), refresh=refresh, stale=stale, market=market)
         raw, compressed = _encode(payload)
     else:
         with _lock:

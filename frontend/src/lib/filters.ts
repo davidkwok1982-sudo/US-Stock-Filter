@@ -5,6 +5,20 @@ export function industryLabel(row: ScreenRow): string {
   return (row.industry?.trim() || row.industryEn?.trim() || "")
 }
 
+/** Prefer Traditional Chinese short name when present (HK). */
+export function displayName(row: ScreenRow): string {
+  return (row.nameZh?.trim() || row.name?.trim() || row.symbol)
+}
+
+function matchesQuery(row: ScreenRow, query: string): boolean {
+  if (!query) return true
+  if (row.symbol.toLowerCase().includes(query)) return true
+  if (row.name.toLowerCase().includes(query)) return true
+  const zh = row.nameZh?.trim()
+  if (zh && zh.toLowerCase().includes(query)) return true
+  return false
+}
+
 const SORTS = new Set<SortKey>([
   "symbol",
   "name",
@@ -60,7 +74,7 @@ export function visibleRows(rows: ScreenRow[], filters: Filters): ScreenRow[] {
       if (row.ret1w == null || !(row.ret1w >= filters.gain1w / 100)) return false
     }
     if (!query) return true
-    return row.symbol.toLowerCase().includes(query) || row.name.toLowerCase().includes(query)
+    return matchesQuery(row, query)
   })
   const direction = filters.dir === "asc" ? 1 : -1
   list.sort((left, right) => {
@@ -71,6 +85,10 @@ export function visibleRows(rows: ScreenRow[], filters: Filters): ScreenRow[] {
       if (!a) return 1
       if (!b) return -1
       const compared = a.localeCompare(b, "zh-Hant")
+      return compared === 0 ? left.symbol.localeCompare(right.symbol) : compared * direction
+    }
+    if (filters.sort === "name") {
+      const compared = displayName(left).localeCompare(displayName(right), "zh-Hant")
       return compared === 0 ? left.symbol.localeCompare(right.symbol) : compared * direction
     }
     const a = left[filters.sort]
