@@ -40,6 +40,8 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="階律", lifespan=lifespan)
+# compresslevel=1 for any non-precompressed JSON. Starlette skips responses that
+# already set Content-Encoding (our /api/screen pre-gzip path), so no double-gzip.
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=1)
 app.add_middleware(
     CORSMiddleware,
@@ -71,18 +73,33 @@ def screen(
         raise HTTPException(status_code=404, detail="沒有這個策略")
     if chosen["status"] != "active":
         raise HTTPException(status_code=501, detail="此策略尚未推出")
-    snapshot = engine.prepare_snapshot()
     refresh = engine.status()
+    accept_encoding = request.headers.get("accept-encoding")
+    # Hot path: warm pre-gzip cache → status() only (no SQLite / row scans).
+    cached_snap = screen_cache.get_cached_snapshot()
+    if cached_snap is not None and (
+        screen_cache.has_entry(include) or (include == "all" and screen_cache.has_entry("pass"))
+    ):
+        stale = store.is_stale(cached_snap)
+        warm = screen_cache.try_warm_response(
+            include=include,
+            refresh=refresh,
+            stale=stale,
+            accept_encoding=accept_encoding,
+        )
+        if warm is not None:
+            return warm
+    # Miss / empty after deploy / first request: load + backfill, then rebuild cache.
+    snapshot = engine.prepare_snapshot()
     if snapshot is None:
         return {"ready": False, "stale": False, "meta": None, "rows": [], "refresh": refresh}
     stale = store.is_stale(snapshot)
-    # Prefer pre-gzipped wire cache rebuilt on save_snapshot; serve bytes fast.
     return screen_cache.response(
         snapshot=snapshot,
         refresh=refresh,
         stale=stale,
         include=include,
-        accept_encoding=request.headers.get("accept-encoding"),
+        accept_encoding=accept_encoding,
     )
 
 

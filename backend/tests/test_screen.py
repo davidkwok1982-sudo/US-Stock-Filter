@@ -585,3 +585,51 @@ def test_ma_confluence_marks_nearby_support():
     for item in levels:
         assert item.get("zoneLow") is not None
         assert item.get("zoneHigh") is not None
+
+
+def test_screen_cache_warm_path_skips_rebuild(tmp_path, monkeypatch):
+    """Warm pass entry serves gzip without needing a fresh prepare_snapshot."""
+    import gzip
+    import json
+
+    from app import screen_cache
+
+    screen_cache.invalidate()
+    snapshot = {
+        "meta": {"refreshedAt": "2026-11-05T00:00:00+00:00", "summary": {"passHard": 2}},
+        "rows": [
+            {"symbol": "AAA", "passHard": True, "score": 80, "scoreParts": [1], "beta": 1.1},
+            {"symbol": "BBB", "passHard": False, "score": 10},
+            {"symbol": "CCC", "passHard": True, "score": 70, "betaBasis": "x"},
+        ],
+    }
+    refresh = {"running": False, "progress": 100, "message": "更新完成", "error": None}
+    screen_cache.rebuild(snapshot, refresh, stale=False)
+    assert screen_cache.has_entry("pass")
+    assert screen_cache.get_cached_snapshot() is snapshot
+
+    warm = screen_cache.try_warm_response(
+        include="pass",
+        refresh=refresh,
+        stale=False,
+        accept_encoding="gzip, deflate",
+    )
+    assert warm is not None
+    assert warm.headers["content-encoding"] == "gzip"
+    payload = json.loads(gzip.decompress(warm.body))
+    assert payload["ready"] is True
+    assert [row["symbol"] for row in payload["rows"]] == ["AAA", "CCC"]
+    assert all("scoreParts" not in row and "beta" not in row for row in payload["rows"])
+
+    # Live refresh patch during polling should not drop the entry.
+    busy = {"running": True, "progress": 40, "message": "更新中", "error": None}
+    warm2 = screen_cache.try_warm_response(
+        include="pass", refresh=busy, stale=False, accept_encoding="gzip"
+    )
+    payload2 = json.loads(gzip.decompress(warm2.body))
+    assert payload2["refresh"]["running"] is True
+    assert len(payload2["rows"]) == 2
+
+    assert screen_cache.try_warm_response(
+        include="pass", refresh=busy, stale=False, accept_encoding=None
+    ).headers.get("content-encoding") is None

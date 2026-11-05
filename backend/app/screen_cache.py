@@ -30,6 +30,66 @@ def invalidate() -> None:
         _entries.clear()
 
 
+def has_entry(include: str = "pass") -> bool:
+    key = "all" if include == "all" else "pass"
+    with _lock:
+        return key in _entries
+
+
+def get_cached_snapshot() -> dict | None:
+    """Return the in-process snapshot held by a warm cache entry, if any."""
+    with _lock:
+        for key in ("pass", "all"):
+            entry = _entries.get(key)
+            if entry is not None and entry.get("snapshot") is not None:
+                return entry["snapshot"]
+    return None
+
+
+def try_warm_response(
+    *,
+    include: str = "pass",
+    refresh: dict,
+    stale: bool,
+    accept_encoding: str | None = None,
+) -> Response | None:
+    """Serve prebuilt bytes when cache is warm — no SQLite / prepare_snapshot.
+
+    For include=all with only pass cached, rebuild all from the in-process
+    snapshot already held by the pass entry.
+    """
+    key = "all" if include == "all" else "pass"
+    with _lock:
+        entry = _entries.get(key)
+        snap = None
+        if entry is not None:
+            snap = entry.get("snapshot")
+        if snap is None:
+            pass_entry = _entries.get("pass")
+            if pass_entry is not None:
+                snap = pass_entry.get("snapshot")
+    if snap is None and entry is None:
+        return None
+    if entry is None and key == "all" and snap is not None:
+        entry = _rebuild_all(snap, refresh, stale)
+    if entry is None and key == "pass" and snap is not None:
+        rebuild(snap, refresh, stale)
+        with _lock:
+            entry = _entries.get("pass")
+    if entry is None:
+        return None
+    with _lock:
+        raw, compressed = _with_live_fields(entry, refresh, stale)
+    wants_gzip = accept_encoding is not None and "gzip" in accept_encoding.lower()
+    if wants_gzip:
+        return Response(
+            content=compressed,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
+    return Response(content=raw, media_type="application/json", headers={"Vary": "Accept-Encoding"})
+
+
 def _slim_row(row: dict) -> dict:
     item = dict(row)
     for key in _SLIM_DROP:
