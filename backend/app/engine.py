@@ -9,21 +9,12 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from datetime import datetime, timedelta, timezone
 
 from app.config import CHUNK_SIZE, COOLDOWN_SECONDS, LIMIT, TTL_HOURS, WORKERS
-from app.close_at_support import RULE_VERSION, detect_close_at_resistance, detect_close_at_support
-from app.evaluate import apply_close_at_resistance, evaluate, normalize_side, spy_snapshot, summarize
+from app.close_at_support import RULE_VERSION, detect_close_at_support
+from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
-from app.levels import find_levels, merge_flagged_resistance, merge_flagged_support
+from app.levels import find_levels, merge_flagged_support
 from app.markets import HK_MARKET, US_MARKET, MarketConfig
-from app.metrics import (
-    SCORE_RULE_VERSION,
-    SHORT_RULE_VERSION,
-    SMA_FAST,
-    SMA_MID,
-    SMA_SHORT,
-    SMA_SLOW,
-    SMA_ULTRA,
-    rolling_sma,
-)
+from app.metrics import SCORE_RULE_VERSION, SMA_FAST, SMA_MID, SMA_SHORT, SMA_SLOW, SMA_ULTRA, rolling_sma
 from app.notes import build_notes
 from app import store
 from app.universe import load_universe as load_universe_us
@@ -119,7 +110,6 @@ class Engine:
         store.save_chart(bench, spy_bars, market=self.mid)
 
         rows: list[dict] = []
-        short_rows: list[dict] = []
         chart_ok = 0
         quote_ok = 0
         chunk = max(50, CHUNK_SIZE)
@@ -164,40 +154,22 @@ class Engine:
             for item in batch:
                 quote = quotes.get(item["symbol"])
                 base = self._base_with_cached_profile(item, quote)
-                bars = charts.get(item["symbol"])
-                kwargs = self._eval_kwargs()
                 rows.append(
                     evaluate(
                         base,
-                        bars,
+                        charts.get(item["symbol"]),
                         quote,
                         spy_bars,
-                        side="long",
-                        **kwargs,
+                        **self._eval_kwargs(),
                     )
                 )
-                short_row = evaluate(
-                    base,
-                    bars,
-                    quote,
-                    spy_bars,
-                    side="short",
-                    detect_levels=False,
-                    **kwargs,
-                )
-                if short_row["passHard"]:
-                    apply_close_at_resistance(short_row, bars)
-                short_rows.append(short_row)
 
             # Persist progressive snapshot only when quotes landed; otherwise a
             # quote outage would overwrite a good cache with passHard=0 rows.
             if quotes:
-                self._sync_short_labels(rows, short_rows)
                 rows.sort(key=lambda row: (-row["score"], row["symbol"]))
-                short_rows.sort(key=lambda row: (-row["score"], row["symbol"]))
                 snapshot = self._build_snapshot(
                     rows=rows,
-                    rows_short=short_rows,
                     spy_bars=spy_bars,
                     source=source,
                     universe_size=total,
@@ -214,25 +186,20 @@ class Engine:
             raise RuntimeError(f"報價下載不足（{quote_ok}/{total}），未覆寫快取")
 
         self._set(progress=91, message="正在補齊行業分類")
-        # Cache for everyone; network fetch only long+short passHard (5k Yahoo
-        # profile calls stall refresh). Remaining labels backfill in background.
-        # Short passers often fail the long gate, so long-only fetch left the
-        # short heatmap stuck on 未分類.
+        # Cache for everyone; network fetch only passHard (5k Yahoo profile calls
+        # stall refresh). Remaining labels backfill via /api/screen / background.
         self._enrich_rows_with_profiles(rows, fetch_missing=False, quiet=True)
-        priority = self._industry_priority_rows(rows, short_rows)
+        pass_hard = [row for row in rows if row.get("passHard")]
         self._enrich_rows_with_profiles(
-            priority,
+            pass_hard,
             fetch_missing=True,
             pass_hard_first=True,
             quiet=False,
         )
         self._set(progress=94, message="正在整理結果")
-        self._sync_short_labels(rows, short_rows)
         rows.sort(key=lambda row: (-row["score"], row["symbol"]))
-        short_rows.sort(key=lambda row: (-row["score"], row["symbol"]))
         snapshot = self._build_snapshot(
             rows=rows,
-            rows_short=short_rows,
             spy_bars=spy_bars,
             source=source,
             universe_size=total,
@@ -260,137 +227,42 @@ class Engine:
         universe_size: int,
         chart_failures: int,
         partial: bool,
-        rows_short: list[dict] | None = None,
     ) -> dict:
         summary = summarize(rows)
         now = datetime.now(timezone.utc).isoformat()
-        criteria = {
-            "minMarketCap": self.market.min_market_cap,
-            "marketCapCurrency": self.market.market_cap_currency,
-            "nearHighWithin": 0.25,
-            "closeAtSupportRuleVersion": RULE_VERSION,
-            "scoreRuleVersion": SCORE_RULE_VERSION,
-        }
-        meta = {
-            "refreshedAt": now,
-            "marketDate": spy_bars[-1]["time"],
-            "universeSource": source,
-            "universe": {
-                "unique": universe_size,
-                "evaluated": len(rows),
-                "partial": partial,
+        return {
+            "meta": {
+                "refreshedAt": now,
+                "marketDate": spy_bars[-1]["time"],
+                "universeSource": source,
+                "universe": {
+                    "unique": universe_size,
+                    "evaluated": len(rows),
+                    "partial": partial,
+                },
+                "summary": summary,
+                "spy": spy_snapshot(spy_bars, symbol=self.market.benchmark),
+                "benchmark": {
+                    "symbol": self.market.benchmark,
+                    "label": self.market.benchmark_label,
+                },
+                "market": self.mid,
+                "source": "Yahoo Finance 圖表與報價（免費公開接口，無需 API 金鑰）",
+                "dollarVolumeMethod": "優先取過去63個交易日的未還原收市價乘成交量之平均；不足則用三個月平均成交量乘現價。流動性只作評分，不作硬性門檻。",
+                "adjustment": "K線及均線使用拆股還原價；成交額用未還原收市價乘成交量。",
+                "marketCapNote": self.market.market_cap_note,
+                "ttlHours": TTL_HOURS,
+                "chartFailures": chart_failures,
+                "criteria": {
+                    "minMarketCap": self.market.min_market_cap,
+                    "marketCapCurrency": self.market.market_cap_currency,
+                    "nearHighWithin": 0.25,
+                    "closeAtSupportRuleVersion": RULE_VERSION,
+                    "scoreRuleVersion": SCORE_RULE_VERSION,
+                },
             },
-            "summary": summary,
-            "spy": spy_snapshot(spy_bars, symbol=self.market.benchmark),
-            "benchmark": {
-                "symbol": self.market.benchmark,
-                "label": self.market.benchmark_label,
-            },
-            "market": self.mid,
-            "side": "long",
-            "source": "Yahoo Finance 圖表與報價（免費公開接口，無需 API 金鑰）",
-            "dollarVolumeMethod": "優先取過去63個交易日的未還原收市價乘成交量之平均；不足則用三個月平均成交量乘現價。流動性只作評分，不作硬性門檻。",
-            "adjustment": "K線及均線使用拆股還原價；成交額用未還原收市價乘成交量。",
-            "marketCapNote": self.market.market_cap_note,
-            "ttlHours": TTL_HOURS,
-            "chartFailures": chart_failures,
-            "criteria": criteria,
+            "rows": rows,
         }
-        snapshot = {"meta": meta, "rows": rows}
-        if rows_short is not None:
-            criteria["shortRuleVersion"] = SHORT_RULE_VERSION
-            meta["summaryShort"] = summarize(rows_short)
-            snapshot["rowsShort"] = rows_short
-        return snapshot
-
-    def ensure_short_rows(self, snapshot: dict) -> dict:
-        """Attach short-side rows computed from cached daily bars. Does not rewrite long rows."""
-        rows = snapshot.get("rows") or []
-        short_rows = snapshot.get("rowsShort")
-        criteria = (snapshot.get("meta") or {}).get("criteria") or {}
-        fresh = (
-            isinstance(short_rows, list)
-            and len(short_rows) == len(rows)
-            and criteria.get("shortRuleVersion") == SHORT_RULE_VERSION
-            and (not short_rows or "closeAtResistance" in short_rows[0])
-        )
-        if not fresh:
-            self._build_short_rows(snapshot)
-            short_rows = snapshot.get("rowsShort") or []
-        self._sync_short_labels(rows, short_rows or [])
-        return snapshot
-
-    def _build_short_rows(self, snapshot: dict) -> None:
-        """Recompute short rows from charts already stored for the long screen."""
-        spy_bars = store.load_chart(self.market.benchmark, market=self.mid) or []
-        updated: list[dict] = []
-        for row in snapshot.get("rows") or []:
-            bars = store.load_chart(row["symbol"], market=self.mid)
-            quote = {
-                "price": row.get("price"),
-                "changePct": row.get("changePct"),
-                "marketCap": row.get("marketCap"),
-                "pe": row.get("pe"),
-                "name": row.get("name"),
-                "exchange": row.get("exchange"),
-                "exchangeName": row.get("exchange"),
-                "quoteType": "EQUITY" if "type" not in (row.get("failCodes") or []) else "ETF",
-                "avgVolume3m": None,
-                "sector": row.get("sectorEn") or row.get("sector"),
-                "industry": row.get("industryEn") or row.get("industry"),
-            }
-            base = {
-                "symbol": row["symbol"],
-                "name": row.get("name") or row["symbol"],
-                "nameZh": row.get("nameZh"),
-                "groups": list(row.get("groups") or []),
-                "sector": row.get("sectorEn") or row.get("sector"),
-                "industry": row.get("industryEn") or row.get("industry"),
-            }
-            fresh = evaluate(
-                base,
-                bars,
-                quote,
-                spy_bars,
-                side="short",
-                detect_levels=False,
-                **self._eval_kwargs(),
-            )
-            if fresh["passHard"]:
-                apply_close_at_resistance(fresh, bars)
-            updated.append(fresh)
-        self._sync_short_labels(snapshot.get("rows") or [], updated)
-        updated.sort(key=lambda item: (-item["score"], item["symbol"]))
-        snapshot["rowsShort"] = updated
-        meta = snapshot.setdefault("meta", {})
-        meta["summaryShort"] = summarize(updated)
-        criteria = meta.setdefault("criteria", {})
-        criteria["shortRuleVersion"] = SHORT_RULE_VERSION
-        store.save_snapshot(snapshot, market=self.mid)
-        log.info("built short rows v%s count=%s pass=%s", SHORT_RULE_VERSION, len(updated), meta["summaryShort"]["pass"])
-
-    def _sync_short_labels(self, long_rows: list[dict], short_rows: list[dict]) -> None:
-        keys = (
-            "name",
-            "nameZh",
-            "sector",
-            "sectorEn",
-            "industry",
-            "industryEn",
-            "groups",
-            "groupLabels",
-            "exchange",
-            "pe",
-        )
-        by_symbol = {row["symbol"]: row for row in long_rows}
-        for row in short_rows:
-            src = by_symbol.get(row["symbol"])
-            if not src:
-                continue
-            for key in keys:
-                value = src.get(key)
-                if value not in (None, "", []):
-                    row[key] = value
 
     def prepare_snapshot(self) -> dict | None:
         """Load snapshot and apply one-shot backfills. Returns None when cache is empty."""
@@ -414,21 +286,14 @@ class Engine:
             self._backfill_score_rules(snapshot)
         if self._needs_industry_backfill(snapshot):
             # Hobby: never block /api/screen on Yahoo assetProfile. Apply any
-            # already-cached fundamentals, then finish long∪short labels in a
+            # already-cached fundamentals, then finish passHard labels in a
             # background thread so pass rows return immediately.
-            priority = self._industry_priority_rows(
-                snapshot.get("rows") or [],
-                snapshot.get("rowsShort") or [],
-            )
-            if priority:
+            pass_hard = [row for row in snapshot["rows"] if row.get("passHard")]
+            if pass_hard:
                 self._enrich_rows_with_profiles(
-                    priority,
+                    pass_hard,
                     fetch_missing=False,
                     quiet=True,
-                )
-                self._sync_short_labels(
-                    snapshot.get("rows") or [],
-                    snapshot.get("rowsShort") or [],
                 )
             self.start_industry_backfill()
         return snapshot
@@ -529,10 +394,6 @@ class Engine:
         criteria["scoreRuleVersion"] = SCORE_RULE_VERSION
         criteria.pop("minBeta", None)
         criteria.pop("minDollarVolume", None)
-        # Long recompute must not keep a short list scored against the previous rows.
-        snapshot.pop("rowsShort", None)
-        meta.pop("summaryShort", None)
-        criteria.pop("shortRuleVersion", None)
         # Normalize universe meta shape for older snapshots.
         universe = meta.get("universe")
         if isinstance(universe, dict) and "unique" in universe and "evaluated" not in universe:
@@ -541,23 +402,14 @@ class Engine:
         store.save_snapshot(snapshot, market=self.mid)
         log.info("backfilled score rules v%s on %s cached rows", SCORE_RULE_VERSION, len(updated))
 
-    def detail(self, symbol: str, interval: str = "1d", side: str = "long") -> dict:
+    def detail(self, symbol: str, interval: str = "1d") -> dict:
         symbol = self.normalize_symbol(symbol)
         interval = normalize_interval(interval)
-        side = normalize_side(side)
         bench = self.market.benchmark
         snapshot = store.load_snapshot(self.mid)
         row = None
         if snapshot:
-            pool = snapshot.get("rows") or []
-            if side == "short":
-                criteria = (snapshot.get("meta") or {}).get("criteria") or {}
-                short_pool = snapshot.get("rowsShort") or []
-                if criteria.get("shortRuleVersion") == SHORT_RULE_VERSION and short_pool:
-                    pool = short_pool
-                else:
-                    pool = []
-            row = next((item for item in pool if item["symbol"] == symbol), None)
+            row = next((item for item in snapshot["rows"] if item["symbol"] == symbol), None)
         client = get_client()
         quote = None
         if interval == "1d":
@@ -609,14 +461,7 @@ class Engine:
                 "sector": None,
                 "industry": None,
             }
-            row = evaluate(
-                base,
-                eval_bars,
-                quote or {},
-                eval_spy,
-                side=side,
-                **self._eval_kwargs(),
-            )
+            row = evaluate(base, eval_bars, quote or {}, eval_spy, **self._eval_kwargs())
         # Chart path is cache-only for fundamentals — never wait on Yahoo quoteSummary.
         # SPA loads /api/stock/{symbol}/profile when profilePending is true.
         fundamentals = self._fundamentals(symbol, allow_network=False)
@@ -644,20 +489,6 @@ class Engine:
             )
             if matched and flagged:
                 levels = merge_flagged_support(levels, flagged)
-            if side == "short":
-                matched_r, note_r, flagged_r = detect_close_at_resistance(bars)
-                detail_row["closeAtResistance"] = matched_r
-                detail_row["closeAtResistanceNote"] = note_r
-                detail_row["closeAtResistanceLevel"] = round(flagged_r["price"], 2) if flagged_r else None
-                detail_row["closeAtResistanceTouches"] = int(flagged_r["touches"]) if flagged_r else None
-                detail_row["closeAtResistanceZoneLow"] = (
-                    round(flagged_r["zoneLow"], 2) if flagged_r and flagged_r.get("zoneLow") is not None else None
-                )
-                detail_row["closeAtResistanceZoneHigh"] = (
-                    round(flagged_r["zoneHigh"], 2) if flagged_r and flagged_r.get("zoneHigh") is not None else None
-                )
-                if matched_r and flagged_r:
-                    levels = merge_flagged_resistance(levels, flagged_r)
         if self.mid == "hk":
             from app.universe_hk import apply_name_zh
 
@@ -668,7 +499,6 @@ class Engine:
             benchmark_short=self.market.benchmark_short,
             currency=self.market.market_cap_currency,
             money_unit=self.market.money_unit,
-            side=side,
         )
         if fundamentals is None:
             profile_pending = True
@@ -945,22 +775,10 @@ class Engine:
         log.info("industry enrich filled=%s fetched_attempt=%s", filled, total_missing)
         return filled
 
-    def _industry_priority_rows(self, rows: list[dict], short_rows: list[dict] | None = None) -> list[dict]:
-        """Long-row objects that passed long and/or short Stage 2 (heatmap first)."""
-        short_pass = {
-            row["symbol"]
-            for row in (short_rows or [])
-            if row.get("passHard")
-        }
-        return [
-            row
-            for row in rows
-            if row.get("passHard") or row.get("symbol") in short_pass
-        ]
-
     def _needs_industry_backfill(self, snapshot: dict) -> bool:
         rows = snapshot.get("rows") or []
-        targets = self._industry_priority_rows(rows, snapshot.get("rowsShort") or [])
+        # Do not fall back to the full universe — that would Yahoo-fetch thousands.
+        targets = [row for row in rows if row.get("passHard")]
         if not targets:
             return False
         return any(self._row_needs_industry(row) for row in targets)
@@ -985,15 +803,11 @@ class Engine:
             rows = snapshot.get("rows") or []
             if not rows:
                 return
-            short_rows = snapshot.get("rowsShort") or []
-            priority = self._industry_priority_rows(rows, short_rows)
-            missing_pass = [row for row in priority if self._row_needs_industry(row)]
-            log.info(
-                "industry backfill start missing_priority=%s short_pass=%s",
-                len(missing_pass),
-                sum(1 for row in short_rows if row.get("passHard")),
-            )
-            # Fill long+short passHard first and persist so both heatmaps update.
+            missing_pass = [
+                row for row in rows if row.get("passHard") and self._row_needs_industry(row)
+            ]
+            log.info("industry backfill start missing_passHard=%s", len(missing_pass))
+            # Fill passHard first and persist so the heatmap updates quickly.
             if missing_pass:
                 filled_pass = self._enrich_rows_with_profiles(
                     missing_pass,
@@ -1013,10 +827,8 @@ class Engine:
                                 "industry": row.get("industryEn") or row.get("industry"),
                             },
                         )
-                self._sync_short_labels(rows, short_rows)
                 rows.sort(key=lambda row: (-row["score"], row["symbol"]))
                 snapshot["rows"] = rows
-                snapshot["rowsShort"] = short_rows
                 meta = snapshot.setdefault("meta", {})
                 criteria = meta.setdefault("criteria", {})
                 criteria["industrySource"] = "yahoo-assetProfile"
@@ -1029,10 +841,8 @@ class Engine:
                 pass_hard_first=False,
                 quiet=True,
             )
-            self._sync_short_labels(rows, short_rows)
             rows.sort(key=lambda row: (-row["score"], row["symbol"]))
             snapshot["rows"] = rows
-            snapshot["rowsShort"] = short_rows
             meta = snapshot.setdefault("meta", {})
             criteria = meta.setdefault("criteria", {})
             criteria["industrySource"] = "yahoo-assetProfile"

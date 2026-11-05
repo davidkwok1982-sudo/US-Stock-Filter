@@ -21,46 +21,36 @@ _GZIP_LEVEL = 1
 _SLIM_DROP = ("scoreParts", "beta", "betaBasis")
 
 _lock = threading.Lock()
-# market -> side -> include -> {"raw": bytes, "gzip": bytes, "refresh": dict, "stale": bool}
-# Long and short payloads are separate so a warm long response cannot serve short rows.
-_entries_by_market: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
+# market -> include -> {"raw": bytes, "gzip": bytes, "refresh": dict, "stale": bool}
+_entries_by_market: dict[str, dict[str, dict[str, Any]]] = {}
 
 
-def _bucket(market: str = "us", side: str = "long") -> dict[str, dict[str, Any]]:
-    root = _entries_by_market.get(market)
-    if root is None:
-        root = {}
-        _entries_by_market[market] = root
-    bucket = root.get(side)
+def _bucket(market: str = "us") -> dict[str, dict[str, Any]]:
+    bucket = _entries_by_market.get(market)
     if bucket is None:
         bucket = {}
-        root[side] = bucket
+        _entries_by_market[market] = bucket
     return bucket
 
 
-def invalidate(market: str | None = None, side: str | None = None) -> None:
+def invalidate(market: str | None = None) -> None:
     with _lock:
         if market is None:
             _entries_by_market.clear()
-            return
-        if side is None:
+        else:
             _entries_by_market.pop(market, None)
-            return
-        root = _entries_by_market.get(market)
-        if root is not None:
-            root.pop(side, None)
 
 
-def has_entry(include: str = "pass", market: str = "us", side: str = "long") -> bool:
+def has_entry(include: str = "pass", market: str = "us") -> bool:
     key = "all" if include == "all" else "pass"
     with _lock:
-        return key in _bucket(market, side)
+        return key in _bucket(market)
 
 
-def get_cached_snapshot(market: str = "us", side: str = "long") -> dict | None:
+def get_cached_snapshot(market: str = "us") -> dict | None:
     """Return the in-process snapshot held by a warm cache entry, if any."""
     with _lock:
-        bucket = _bucket(market, side)
+        bucket = _bucket(market)
         for key in ("pass", "all"):
             entry = bucket.get(key)
             if entry is not None and entry.get("snapshot") is not None:
@@ -75,7 +65,6 @@ def try_warm_response(
     stale: bool,
     accept_encoding: str | None = None,
     market: str = "us",
-    side: str = "long",
 ) -> Response | None:
     """Serve prebuilt bytes when cache is warm — no SQLite / prepare_snapshot.
 
@@ -84,7 +73,7 @@ def try_warm_response(
     """
     key = "all" if include == "all" else "pass"
     with _lock:
-        bucket = _bucket(market, side)
+        bucket = _bucket(market)
         entry = bucket.get(key)
         snap = None
         if entry is not None:
@@ -96,11 +85,11 @@ def try_warm_response(
     if snap is None and entry is None:
         return None
     if entry is None and key == "all" and snap is not None:
-        entry = _rebuild_all(snap, refresh, stale, market=market, side=side)
+        entry = _rebuild_all(snap, refresh, stale, market=market)
     if entry is None and key == "pass" and snap is not None:
-        rebuild(snap, refresh, stale, market=market, side=side)
+        rebuild(snap, refresh, stale, market=market)
         with _lock:
-            entry = _bucket(market, side).get("pass")
+            entry = _bucket(market).get("pass")
     if entry is None:
         return None
     with _lock:
@@ -122,20 +111,6 @@ def _slim_row(row: dict) -> dict:
     return item
 
 
-def _view_rows(snapshot: dict, side: str) -> list:
-    if side == "short":
-        return list(snapshot.get("rowsShort") or [])
-    return list(snapshot.get("rows") or [])
-
-
-def _view_meta(snapshot: dict, side: str) -> dict:
-    meta = dict(snapshot.get("meta") or {})
-    meta["side"] = "short" if side == "short" else "long"
-    if side == "short" and meta.get("summaryShort") is not None:
-        meta["summary"] = meta["summaryShort"]
-    return meta
-
-
 def _build_payload(
     snapshot: dict,
     *,
@@ -143,9 +118,8 @@ def _build_payload(
     refresh: dict,
     stale: bool,
     market: str = "us",
-    side: str = "long",
 ) -> dict:
-    rows = _view_rows(snapshot, side)
+    rows = snapshot.get("rows") or []
     if include_all:
         slim = [_slim_row(row) for row in rows]
     else:
@@ -161,7 +135,7 @@ def _build_payload(
     return {
         "ready": True,
         "stale": stale,
-        "meta": _view_meta(snapshot, side),
+        "meta": snapshot.get("meta"),
         "rows": slim,
         "refresh": refresh,
     }
@@ -173,21 +147,15 @@ def _encode(payload: dict) -> tuple[bytes, bytes]:
     return raw, compressed
 
 
-def rebuild(snapshot: dict | None, refresh: dict, stale: bool, market: str = "us", side: str = "long") -> None:
-    """Rebuild default (passHard) wire cache; drop include=all until requested.
-
-    Rebuilding the long cache drops short bytes so the two sides cannot mix after
-    a snapshot write. The next short request rebuilds from ``rowsShort``.
-    """
+def rebuild(snapshot: dict | None, refresh: dict, stale: bool, market: str = "us") -> None:
+    """Rebuild default (passHard) wire cache; drop include=all until requested."""
     if snapshot is None:
-        invalidate(market=market, side=side if side == "short" else None)
+        invalidate(market=market)
         return
-    pass_payload = _build_payload(
-        snapshot, include_all=False, refresh=refresh, stale=stale, market=market, side=side
-    )
+    pass_payload = _build_payload(snapshot, include_all=False, refresh=refresh, stale=stale, market=market)
     pass_raw, pass_gz = _encode(pass_payload)
     with _lock:
-        bucket = _bucket(market, side)
+        bucket = _bucket(market)
         bucket["pass"] = {
             "raw": pass_raw,
             "gzip": pass_gz,
@@ -197,10 +165,6 @@ def rebuild(snapshot: dict | None, refresh: dict, stale: bool, market: str = "us
         }
         # Full-universe bytes are large; rebuild lazily on ?include=all.
         bucket.pop("all", None)
-        if side == "long":
-            root = _entries_by_market.get(market)
-            if root is not None:
-                root.pop("short", None)
     log.info(
         "screen cache rebuilt pass_rows=%s pass_gzip=%sB",
         len(pass_payload["rows"]),
@@ -208,8 +172,8 @@ def rebuild(snapshot: dict | None, refresh: dict, stale: bool, market: str = "us
     )
 
 
-def _rebuild_all(snapshot: dict, refresh: dict, stale: bool, market: str = "us", side: str = "long") -> dict[str, object]:
-    all_payload = _build_payload(snapshot, include_all=True, refresh=refresh, stale=stale, market=market, side=side)
+def _rebuild_all(snapshot: dict, refresh: dict, stale: bool, market: str = "us") -> dict[str, object]:
+    all_payload = _build_payload(snapshot, include_all=True, refresh=refresh, stale=stale, market=market)
     all_raw, all_gz = _encode(all_payload)
     entry = {
         "raw": all_raw,
@@ -219,31 +183,24 @@ def _rebuild_all(snapshot: dict, refresh: dict, stale: bool, market: str = "us",
         "snapshot": snapshot,
     }
     with _lock:
-        _bucket(market, side)["all"] = entry
+        _bucket(market)["all"] = entry
     log.info("screen cache rebuilt all_rows=%s all_gzip=%sB", len(all_payload["rows"]), len(all_gz))
     return entry
 
 
-def _ensure(
-    snapshot: dict | None,
-    refresh: dict,
-    stale: bool,
-    include: str,
-    market: str = "us",
-    side: str = "long",
-) -> dict[str, Any] | None:
+def _ensure(snapshot: dict | None, refresh: dict, stale: bool, include: str, market: str = "us") -> dict[str, Any] | None:
     key = "all" if include == "all" else "pass"
     with _lock:
-        entry = _bucket(market, side).get(key)
+        entry = _bucket(market).get(key)
     if entry is not None:
         return entry
     if snapshot is None:
         return None
     if key == "pass":
-        rebuild(snapshot, refresh, stale, market=market, side=side)
+        rebuild(snapshot, refresh, stale, market=market)
         with _lock:
-            return _bucket(market, side).get("pass")
-    return _rebuild_all(snapshot, refresh, stale, market=market, side=side)
+            return _bucket(market).get("pass")
+    return _rebuild_all(snapshot, refresh, stale, market=market)
 
 
 def _with_live_fields(entry: dict[str, Any], refresh: dict, stale: bool) -> tuple[bytes, bytes]:
@@ -270,7 +227,6 @@ def response(
     include: str = "pass",
     accept_encoding: str | None = None,
     market: str = "us",
-    side: str = "long",
 ) -> Response:
     """Return a Response for /api/screen, serving pre-gzipped bytes when possible."""
     if snapshot is None:
@@ -284,12 +240,10 @@ def response(
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         return Response(content=raw, media_type="application/json")
 
-    entry = _ensure(snapshot, refresh, stale, include, market=market, side=side)
+    entry = _ensure(snapshot, refresh, stale, include, market=market)
     if entry is None:
         # Should not happen; fall back to building once.
-        payload = _build_payload(
-            snapshot, include_all=(include == "all"), refresh=refresh, stale=stale, market=market, side=side
-        )
+        payload = _build_payload(snapshot, include_all=(include == "all"), refresh=refresh, stale=stale, market=market)
         raw, compressed = _encode(payload)
     else:
         with _lock:

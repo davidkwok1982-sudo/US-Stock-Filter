@@ -5,35 +5,18 @@ import { Separator } from "@/components/ui/separator"
 import { useScreen } from "@/lib/screen-context.tsx"
 
 export function StrategyPage() {
-  const { copy, market, side } = useScreen()
-  const short = side === "short"
+  const { copy, market } = useScreen()
 
   useEffect(() => {
-    const title = short ? `${copy.title} · 短倉` : copy.title
-    document.title = `${title} · 策略說明`
-  }, [copy.title, short])
+    document.title = `${copy.title} · 策略說明`
+  }, [copy.title])
 
   const scoreRows = useMemo(() => {
-    const rsRule = short
-      ? `近約5個交易日回報減 ${copy.benchmarkShort}：領先 5 個百分點或更多為 0，持平約 10，落後 8 個百分點或更多為 25。愈跑輸，分數愈高。`
-      : `近約5個交易日回報減 ${copy.benchmarkShort}：落後 5 個百分點或更多為 0，持平約 10，領先 8 個百分點或更多為 25。`
-    const liquidityRule = short
-      ? market === "hk"
-        ? "日均成交額約 3,000 萬港元起計分，愈高愈接近滿分 10。與長倉同一套，只作評分、不作硬性剔除。"
-        : "日均成交額 3,000 萬美元約 4 分，大約八倍（2.4 億美元）封頂 10 分。與長倉同一套，只作評分、不作硬性剔除。"
-      : market === "hk"
+    const rsRule = `近約5個交易日回報減 ${copy.benchmarkShort}：落後 5 個百分點或更多為 0，持平約 10，領先 8 個百分點或更多為 25。`
+    const liquidityRule =
+      market === "hk"
         ? "日均成交額約 3,000 萬港元起計分，愈高愈接近滿分 10（門檻沿用美股精神；Yahoo 港股市值／成交額多以港元計）。"
         : "日均成交額 3,000 萬美元約 4 分，大約八倍（2.4 億美元）封頂 10 分。"
-    if (short) {
-      return [
-        ["低於200天線的距離", "20", "低於 0–30% 得 20；30–60% 得 12；超過 60% 得 5。未跌破200天線得 0。愈貼近均線（跌勢較早）分數愈高。"],
-        ["低於50天線", "15", "現價低於50天線得 15，否則 0。"],
-        ["50天線向下", "15", "50天線較約5個交易日前下跌。"],
-        ["200天線向下", "15", "200天線較約5個交易日前下跌。"],
-        [copy.scoreRsLabel, "25", rsRule],
-        ["流動性", "10", liquidityRule],
-      ] as const
-    }
     return [
       ["與200天線的距離", "20", "高於 0–30% 得 20；30–60% 得 12；超過 60% 得 5。未站上得 0。"],
       ["站上50天線", "15", "現價高於50天線得 15，否則 0。"],
@@ -42,45 +25,10 @@ export function StrategyPage() {
       [copy.scoreRsLabel, "25", rsRule],
       ["流動性", "10", liquidityRule],
     ] as const
-  }, [copy.benchmarkShort, copy.scoreRsLabel, market, short])
+  }, [copy.benchmarkShort, copy.scoreRsLabel, market])
 
   const steps = useMemo(
-    () =>
-      short
-        ? [
-            {
-              title: "先找出下跌排列的股票",
-              body: "長倉硬性條件的鏡像：現價＜50 天線＜150 天線＜200 天線，而且 50／150／200 天線過去約一星期都向下。通過這關的才進短倉名單。這是技術篩選，不是建議沽空。",
-            },
-            {
-              title: "沿用市值、流動性與普通股門檻",
-              body:
-                market === "hk"
-                  ? "硬性門檻仍是市值逾 100 億港元（Yahoo 對 .HK 普通股市值通常以港元計；100 億=1e10），並只留港交所普通股（已剔除 ETF、窩輪、牛熊證）。流動性同樣只計入評分、不作硬性剔除。港股即使入選，也不保證能借到券。"
-                  : "硬性門檻仍是市值逾 20 億美元，並沿用美股普通股、剔除場外交易的同一套閘門。流動性只計入評分、不作硬性剔除。",
-            },
-            {
-              title: "Filter 跑輸大市、只留 RS 弱的股票",
-              body: `短倉想看跑輸大市的股份。評分裡「${copy.scoreRsLabel}」把相對強度倒轉：愈落後分數愈高。可選開關「${market === "hk" ? "跑輸恆指" : "跑輸 SPY"}」要求近約 5 個與 20 個交易日收市對收市總回報減 ${copy.benchmarkShort} 皆為負，兩者同時符合才留下。`,
-            },
-            {
-              title: "找出弱勢板塊（短倉通過家數最多的那類）",
-              body: "短倉通過名單按細分板塊家數排熱力圖，只顯示頭十位。家數愈多，代表該板塊裡符合下跌排列的股份愈多。版塊內仍按短倉評分排序。",
-            },
-            {
-              title: "距離 200 天線較近，跌勢相對早期",
-              body: "評分看股價在 200 天線下方有多近：剛跌破、離線不遠的分數較高；已經跌得很遠的分數會被壓低，方便先看較早期的跌勢。",
-            },
-            {
-              title: "近一星期跌幅",
-              body: "篩出近期跌幅較大嘅股份。門檻是股份本身近約 5 個交易日的跌幅，唔係相對大市。",
-            },
-            {
-              title: "價格剛好落在阻力位",
-              body: "可選開關「收市近阻力」：最新收市落在結構阻力區內，作為長倉「收市近支持」的鏡像。阻力區以日線結構估計（清晰擺動高點＋近約 20／60 日區間高點，並把 10／20／50／150／200 天線計入匯合；須至少兩次觸及才標出）。圖表仍畫支持與阻力中軸虛線；篩選用阻力中軸 ±0.5×ATR 區。優先取較接近中軸、且收市在中軸下方的阻力。",
-            },
-          ]
-        : [
+    () => [
       {
         title: "先找出 Stage 2 股票",
         body: "Stage 2 指下跌完、做底，然後開始回升的股票。本站硬性條件：現價＞50 天線＞150 天線＞200 天線，而且 50／150／200 天線過去約一星期都向上。通過這關的才進名單。",
@@ -113,7 +61,7 @@ export function StrategyPage() {
         body: "可選開關「收市近支持」：最新收市落在結構支持區內。止蝕可放支持位下面，向上機率相對較高。支持區以日線結構估計（清晰擺動低點＋近約 20／60 日區間低點，並把 10／20／50／150／200 天線計入匯合；須至少兩次觸及才標出）。圖表只畫中軸虛線；篩選用中軸 ±0.5×ATR 區。優先取較接近中軸、且收市在中軸上方的支持。篩選與圖表共用同一套定義。",
       },
     ],
-    [copy.benchmarkShort, copy.rsChip, copy.scoreRsLabel, market, short],
+    [copy.benchmarkShort, copy.rsChip, copy.scoreRsLabel, market],
   )
 
   const universeBlurb =
@@ -124,13 +72,9 @@ export function StrategyPage() {
   return (
     <article className="mx-auto max-w-3xl space-y-8 pb-8">
       <header>
-        <p className="text-xs tracking-[0.22em] text-muted-foreground">{short ? `${copy.title} · 短倉` : copy.title}</p>
-        <h1 className="mt-1 font-heading text-4xl font-semibold">{short ? "策略說明 · 短倉" : "策略說明"}</h1>
-        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          {short
-            ? `本站在同一頁把長倉七步倒轉成短倉技術篩選：下跌均線排列、同一套市值與流動性、跑輸${copy.benchmarkShort}、弱勢板塊、跌勢早期、近一星期跌幅，以及是否靠近阻力。用「短倉」切換（網址 ?side=short），不會另開路徑。只供教育觀察，並非投資建議，亦不保證能借到券。`
-            : copy.strategyIntro}
-        </p>
+        <p className="text-xs tracking-[0.22em] text-muted-foreground">{copy.title}</p>
+        <h1 className="mt-1 font-heading text-4xl font-semibold">策略說明</h1>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{copy.strategyIntro}</p>
       </header>
 
       <section className="space-y-4 text-sm leading-relaxed">
@@ -150,10 +94,7 @@ export function StrategyPage() {
       <section className="space-y-3">
         <h2 className="font-heading text-2xl">評分</h2>
         <p className="text-sm leading-relaxed">
-          通過硬性條件之後，評分只決定先後，滿分 100。
-          {short
-            ? `弱勢、較早跌破長期均線、近一星期更跑輸 ${copy.benchmarkShort} 的股份會排得較前。`
-            : `一隻股份可以通過均線堆疊但近一星期落後 ${copy.benchmarkShort}，評分就會偏低。`}
+          通過硬性條件之後，評分只決定先後，滿分 100。一隻股份可以通過均線堆疊但近一星期落後 {copy.benchmarkShort}，評分就會偏低。
         </p>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full min-w-[36rem] text-left text-sm">
@@ -181,33 +122,17 @@ export function StrategyPage() {
         <h2 className="font-heading text-2xl">可選收緊</h2>
         <p>這些開關預設關掉。打開之後只會縮小表格，不會改寫頂部的通過家數。</p>
         <ul className="list-disc space-y-1 pl-5">
-          {short ? (
-            <>
-              <li>
-                {market === "hk" ? "跑輸恆指" : "跑輸 SPY"}：近約 5 個與 20 個交易日收市對收市總回報減 {copy.benchmarkShort} 皆為負（兩者同時符合）。
-              </li>
-              <li>收市近阻力：見上文第 7 步。短倉名單用已存日線重算，不會和長倉快取混在一起。</li>
-              <li>
-                近一星期跌幅：股份本身近約 5 個交易日收市對收市回報 ≤ -X%（網址參數
-                <code className="mx-1 rounded bg-secondary px-1">drop1w</code>
-                ；預設 5）。唔係相對 {copy.benchmarkShort}。
-              </li>
-            </>
-          ) : (
-            <>
-              <li>
-                {copy.rsChip}：近約 5 個與 20 個交易日收市對收市總回報減 {copy.benchmarkShort} 皆為正（兩者同時符合）。
-              </li>
-              <li>
-                收市近支持：見上文第 7 步。全量更新時會重算，規則版本變更時亦會用已存日線重填此欄。
-              </li>
-              <li>
-                近一星期升幅：股份本身近約 5 個交易日收市對收市升幅 ≥ 你輸入的 X%（網址參數
-                <code className="mx-1 rounded bg-secondary px-1">gain1w</code>
-                ；預設 5）。唔係相對 {copy.benchmarkShort}。
-              </li>
-            </>
-          )}
+          <li>
+            {copy.rsChip}：近約 5 個與 20 個交易日收市對收市總回報減 {copy.benchmarkShort} 皆為正（兩者同時符合）。
+          </li>
+          <li>
+            收市近支持：見上文第 7 步。全量更新時會重算，規則版本變更時亦會用已存日線重填此欄。
+          </li>
+          <li>
+            近一星期升幅：股份本身近約 5 個交易日收市對收市升幅 ≥ 你輸入的 X%（網址參數
+            <code className="mx-1 rounded bg-secondary px-1">gain1w</code>
+            ；預設 5）。唔係相對 {copy.benchmarkShort}。
+          </li>
         </ul>
       </section>
 
@@ -226,7 +151,7 @@ export function StrategyPage() {
 
       <section className="space-y-3 text-sm leading-relaxed">
         <p>
-          <Link to={short ? `${copy.basePath || "/"}?side=short` : copy.basePath || "/"} className="underline underline-offset-4">
+          <Link to={copy.basePath || "/"} className="underline underline-offset-4">
             返回篩選結果
           </Link>
         </p>

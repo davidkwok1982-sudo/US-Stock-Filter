@@ -5,7 +5,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { displayName } from "@/lib/filters.ts"
 import { formatPct, toneClass } from "@/lib/format.ts"
 import { useScreen } from "@/lib/screen-context.tsx"
-import { stockHref } from "@/lib/market.ts"
 import { cn } from "@/lib/utils.ts"
 import type { ScreenRow } from "@/lib/types.ts"
 
@@ -99,20 +98,18 @@ function tileShade(score: number, maxScore: number): string {
 function openRow(
   navigate: ReturnType<typeof useNavigate>,
   symbol: string,
-  href: string,
+  stockPath: (symbol: string) => string,
   sessionKey: string,
 ) {
   sessionStorage.setItem(sessionKey, symbol)
-  void navigate(href)
+  void navigate(stockPath(symbol))
 }
 
 export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
   const buckets = useMemo(() => groupByIndustry(rows).slice(0, 10), [rows])
   const maxCount = buckets[0]?.count ?? 0
   const navigate = useNavigate()
-  const { copy, side } = useScreen()
-  const short = side === "short"
-  const rsChip = short ? (copy.id === "hk" ? "跑輸恆指" : "跑輸 SPY") : copy.rsChip
+  const { copy } = useScreen()
 
   if (rows.length === 0 || buckets.length === 0) return null
 
@@ -126,14 +123,12 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs tracking-[0.16em] text-muted-foreground">{short ? "弱勢版塊" : "領導版塊"}</p>
+          <p className="text-xs tracking-[0.16em] text-muted-foreground">領導版塊</p>
           <h2 id="industry-heatmap-title" className="font-heading text-2xl font-semibold">
             細分版塊熱力圖
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            {short
-              ? "短倉名單按細分版塊家數排名，只顯示頭十位。家數愈多，代表該版塊裡通過下跌排列的股份愈多。再在版塊內看短倉評分。"
-              : "第二階段名單按細分版塊家數排名，只顯示頭十位。先看領導版塊，再在版塊內找評分／相對強度較高的股份。"}
+            第二階段名單按細分版塊家數排名，只顯示頭十位。先看領導版塊，再在版塊內找評分／相對強度較高的股份。
           </p>
         </div>
         <p className="text-sm text-muted-foreground">
@@ -148,10 +143,9 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
             bucket={leaders[0]}
             maxCount={maxCount}
             hero
-            onOpen={(symbol) => openRow(navigate, symbol, stockHref(copy, symbol, side), copy.sessionKey)}
-            rsChip={rsChip}
-            short={short}
-            scoreRsLabel={copy.scoreRsLabel}
+            onOpen={(symbol) => openRow(navigate, symbol, copy.stockPath, copy.sessionKey)}
+          rsChip={copy.rsChip}
+              scoreRsLabel={copy.scoreRsLabel}
             />
         </div>
       ) : null}
@@ -163,10 +157,9 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
               bucket={bucket}
               maxCount={maxCount}
               hero
-              onOpen={(symbol) => openRow(navigate, symbol, stockHref(copy, symbol, side), copy.sessionKey)}
-            rsChip={rsChip}
-            short={short}
-            scoreRsLabel={copy.scoreRsLabel}
+              onOpen={(symbol) => openRow(navigate, symbol, copy.stockPath, copy.sessionKey)}
+            rsChip={copy.rsChip}
+              scoreRsLabel={copy.scoreRsLabel}
             />
           ))}
         </div>
@@ -180,10 +173,9 @@ export function IndustryHeatmap({ rows }: { rows: ScreenRow[] }) {
               bucket={bucket}
               maxCount={maxCount}
               hero={false}
-              onOpen={(symbol) => openRow(navigate, symbol, stockHref(copy, symbol, side), copy.sessionKey)}
-            rsChip={rsChip}
-            short={short}
-            scoreRsLabel={copy.scoreRsLabel}
+              onOpen={(symbol) => openRow(navigate, symbol, copy.stockPath, copy.sessionKey)}
+            rsChip={copy.rsChip}
+              scoreRsLabel={copy.scoreRsLabel}
             />
           ))}
         </div>
@@ -211,7 +203,6 @@ function IndustryBlock({
   onOpen,
   rsChip,
   scoreRsLabel,
-  short = false,
 }: {
   bucket: IndustryBucket
   maxCount: number
@@ -219,7 +210,6 @@ function IndustryBlock({
   onOpen: (symbol: string) => void
   rsChip: string
   scoreRsLabel: string
-  short?: boolean
 }) {
   const maxScore = bucket.rows.reduce((m, r) => Math.max(m, r.score), 0)
   const isTop = bucket.rank <= 3
@@ -306,7 +296,7 @@ function IndustryBlock({
                       className={cn(
                         "num mt-0.5 block text-[10px]",
                         toneClass(row.rs1w ?? row.rs6m),
-                        (short ? row.rs1w != null && row.rs1w < 0 : row.rsBeat) ? "font-medium" : "",
+                        row.rsBeat ? "font-medium" : "",
                       )}
                       title={scoreRsLabel}
                     >
@@ -321,13 +311,7 @@ function IndustryBlock({
                   </span>
                   <span>版塊：{board}</span>
                   <span className="text-background/80">評分 {row.score} · 一星期 RS {formatPct(row.rs1w ?? row.rs6m)}</span>
-                  {short
-                    ? row.rs1w != null && row.rs1w < 0 && row.rs20 != null && row.rs20 < 0
-                      ? <span className="text-background/80">{rsChip}</span>
-                      : null
-                    : row.rsBeat && row.rsBeat20
-                      ? <span className="text-background/80">{rsChip}</span>
-                      : null}
+                  {row.rsBeat && row.rsBeat20 ? <span className="text-background/80">{rsChip}</span> : null}
                 </TooltipContent>
               </Tooltip>
             </li>

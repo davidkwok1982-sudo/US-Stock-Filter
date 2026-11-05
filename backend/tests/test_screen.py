@@ -5,18 +5,15 @@ from __future__ import annotations
 import random
 from datetime import date, timedelta
 
-from app.evaluate import FAILS, FAILS_SHORT, evaluate
+from app.evaluate import FAILS, evaluate
 from app.levels import find_levels
 from app.metrics import (
     SCORE_MAX,
     SLOPE_LOOKBACK,
-    build_score,
     points_distance,
-    points_distance_below,
     points_liquidity,
     points_near_high,
     points_rs,
-    points_rs_inverted,
 )
 from app.notes import build_notes
 from app import store
@@ -575,177 +572,6 @@ def test_enrich_rows_uses_fundamentals_cache(tmp_path, monkeypatch):
     assert rows[0]["industry"]  # zh or passthrough
 
 
-def test_industry_priority_includes_short_only_passers(tmp_path, monkeypatch):
-    """Short heatmap needs profiles for names that fail the long Stage 2 gate."""
-    from app.engine import Engine
-    from app import store as store_mod
-
-    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
-    engine = Engine()
-    rows = [
-        {
-            "symbol": "LONG",
-            "passHard": True,
-            "score": 90,
-            "sector": None,
-            "sectorEn": None,
-            "industry": None,
-            "industryEn": None,
-        },
-        {
-            "symbol": "SHORTONLY",
-            "passHard": False,
-            "score": 5,
-            "sector": None,
-            "sectorEn": None,
-            "industry": None,
-            "industryEn": None,
-        },
-        {
-            "symbol": "NEITHER",
-            "passHard": False,
-            "score": 1,
-            "sector": None,
-            "sectorEn": None,
-            "industry": None,
-            "industryEn": None,
-        },
-    ]
-    short_rows = [
-        {**rows[0], "passHard": False, "score": 2},
-        {**rows[1], "passHard": True, "score": 88},
-        {**rows[2], "passHard": False, "score": 1},
-    ]
-    priority = engine._industry_priority_rows(rows, short_rows)
-    assert [row["symbol"] for row in priority] == ["LONG", "SHORTONLY"]
-    snapshot = {"rows": rows, "rowsShort": short_rows}
-    assert engine._needs_industry_backfill(snapshot) is True
-
-
-
-def test_industry_priority_empty_when_no_passers(tmp_path, monkeypatch):
-    """Do not fall back to the full universe — that would Yahoo-fetch thousands."""
-    from app.engine import Engine
-    from app import store as store_mod
-
-    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
-    engine = Engine()
-    rows = [
-        {"symbol": "A", "passHard": False, "score": 1, "industry": None, "industryEn": None, "sector": None, "sectorEn": None},
-        {"symbol": "B", "passHard": False, "score": 1, "industry": None, "industryEn": None, "sector": None, "sectorEn": None},
-    ]
-    short_rows = [{**row, "passHard": False} for row in rows]
-    assert engine._industry_priority_rows(rows, short_rows) == []
-    assert engine._needs_industry_backfill({"rows": rows, "rowsShort": short_rows}) is False
-
-
-def test_prepare_snapshot_defers_yahoo_industry_fetch(tmp_path, monkeypatch):
-    """Screen hot path must not wait on assetProfile network calls."""
-    from app.engine import Engine
-    from app import store as store_mod
-
-    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
-    store_mod.init_db()
-    engine = Engine()
-    snapshot = {
-        "meta": {"criteria": {}, "summary": {"pass": 1}, "universe": {"unique": 1, "evaluated": 1}},
-        "rows": [
-            {
-                "symbol": "NEEDY",
-                "passHard": True,
-                "score": 80,
-                "failCodes": [],
-                "industry": None,
-                "industryEn": None,
-                "sector": None,
-                "sectorEn": None,
-                "closeAtSupport": False,
-                "rs1w": 0.01,
-                "rs20": 0.02,
-            }
-        ],
-        "rowsShort": [],
-    }
-    store_mod.save_snapshot(snapshot)
-    calls = []
-
-    def fake_enrich(rows, *, fetch_missing=True, **kwargs):
-        calls.append({"n": len(rows), "fetch_missing": fetch_missing})
-        return 0
-
-    started = []
-
-    monkeypatch.setattr(engine, "_enrich_rows_with_profiles", fake_enrich)
-    monkeypatch.setattr(engine, "start_industry_backfill", lambda: started.append(True) or True)
-    # Skip unrelated backfills
-    monkeypatch.setattr(engine, "_backfill_close_at_support", lambda snap: None)
-    monkeypatch.setattr(engine, "_backfill_score_rules", lambda snap: None)
-
-    out = engine.prepare_snapshot()
-    assert out is not None
-    assert calls and all(c["fetch_missing"] is False for c in calls)
-    assert started == [True]
-
-
-def test_sync_short_labels_copies_industry_onto_short_passers(tmp_path, monkeypatch):
-    from app.engine import Engine
-    from app import store as store_mod
-
-    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
-    store_mod.init_db()
-    store_mod.save_fundamentals(
-        "WEAK", {"sector": "Energy", "industry": "Oil & Gas E&P"}
-    )
-    engine = Engine()
-    long_rows = [
-        {
-            "symbol": "WEAK",
-            "name": "Weak Co",
-            "passHard": False,
-            "score": 4,
-            "sector": None,
-            "sectorEn": None,
-            "industry": None,
-            "industryEn": None,
-            "groups": ["us"],
-            "groupLabels": ["美股"],
-            "exchange": "NYSE",
-            "pe": None,
-        }
-    ]
-    short_rows = [
-        {
-            "symbol": "WEAK",
-            "name": "Weak Co",
-            "passHard": True,
-            "score": 91,
-            "sector": None,
-            "sectorEn": None,
-            "industry": None,
-            "industryEn": None,
-            "groups": ["us"],
-            "groupLabels": ["美股"],
-            "exchange": "NYSE",
-            "pe": None,
-        }
-    ]
-    filled = engine._enrich_rows_with_profiles(
-        engine._industry_priority_rows(long_rows, short_rows),
-        fetch_missing=False,
-    )
-    assert filled == 1
-    assert long_rows[0]["industryEn"] == "Oil & Gas E&P"
-    engine._sync_short_labels(long_rows, short_rows)
-    assert short_rows[0]["industryEn"] == "Oil & Gas E&P"
-    assert short_rows[0]["sectorEn"] == "Energy"
-    assert short_rows[0]["industry"]
-    assert short_rows[0]["sector"]
-
-
 def test_levels_include_atr_zones_and_min_touches():
     from app.levels import find_levels
     from app.swings import MIN_TOUCHES
@@ -838,192 +664,63 @@ def test_screen_cache_warm_path_skips_rebuild(tmp_path, monkeypatch):
     ).headers.get("content-encoding") is None
 
 
-def test_short_score_prefers_early_and_weaker_rs():
-    near = build_score(
-        distance200=-0.08,
-        above50=False,
-        below50=True,
-        slope50=-0.01,
-        slope200=-0.01,
-        rs1w=-0.08,
-        dollar=30_000_000,
-        side="short",
-    )[0]
-    far = build_score(
-        distance200=-0.9,
-        above50=False,
-        below50=True,
-        slope50=-0.01,
-        slope200=-0.01,
-        rs1w=-0.08,
-        dollar=30_000_000,
-        side="short",
-    )[0]
-    assert near > far
-    weak = build_score(
-        distance200=-0.1,
-        above50=False,
-        below50=True,
-        slope50=-0.01,
-        slope200=-0.01,
-        rs1w=-0.08,
-        dollar=30_000_000,
-        side="short",
-    )[0]
-    strong = build_score(
-        distance200=-0.1,
-        above50=False,
-        below50=True,
-        slope50=-0.01,
-        slope200=-0.01,
-        rs1w=0.08,
-        dollar=30_000_000,
-        side="short",
-    )[0]
-    assert weak > strong
-    assert points_distance_below(-0.1) == 20
-    assert points_distance_below(0.1) == 0
-    assert points_rs_inverted(-0.08) == 25
-    assert points_rs_inverted(0.05) == 0
-    assert points_rs_inverted(0) == points_rs(0)
-    long_score = build_score(
-        distance200=0.1,
-        above50=True,
-        slope50=0.01,
-        slope200=0.01,
-        rs1w=0.08,
-        dollar=30_000_000,
-    )[0]
-    assert long_score == 20 + 15 + 15 + 15 + 25 + 4
+def test_needs_industry_backfill_false_when_no_passers(tmp_path, monkeypatch):
+    """Do not fall back to the full universe — that would Yahoo-fetch thousands."""
+    from app.engine import Engine
+    from app import store as store_mod
+
+    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
+    engine = Engine()
+    rows = [
+        {"symbol": "A", "passHard": False, "score": 1, "industry": None, "industryEn": None, "sector": None, "sectorEn": None},
+        {"symbol": "B", "passHard": False, "score": 1, "industry": None, "industryEn": None, "sector": None, "sectorEn": None},
+    ]
+    assert engine._needs_industry_backfill({"rows": rows}) is False
 
 
-def test_downtrend_passes_short_gate_and_uptrend_fails():
-    closes = [200 - index * 0.4 for index in range(260)]
-    bars = _bars(date(2024, 1, 2), closes, volume=5_000_000)
-    _, spy_bars = _paired()
-    quote = {
-        "price": bars[-1]["close"],
-        "marketCap": 40_000_000_000,
-        "quoteType": "EQUITY",
-        "exchangeName": "NYSE",
-    }
-    base = {"symbol": "DOWN", "name": "Down Co", "groups": ["us"], "sector": None, "industry": None}
-    short_row = evaluate(base, bars, quote, spy_bars, side="short")
-    assert short_row["passHard"] is True
-    assert short_row["price"] < short_row["sma50"] < short_row["sma150"] < short_row["sma200"]
-    assert short_row["slopeDown"] is True
-    assert short_row["slopeUp"] is False
-    assert short_row["failReasons"] == []
-    assert "ma_stack" not in short_row["failCodes"]
-    assert FAILS_SHORT["ma_stack"] == "股價＜50＜150＜200"
-    assert FAILS_SHORT["ma_slope"] == "均線未全部向下"
+def test_prepare_snapshot_defers_yahoo_industry_fetch(tmp_path, monkeypatch):
+    """Screen hot path must not wait on assetProfile network calls."""
+    from app.engine import Engine
+    from app import store as store_mod
 
-    stock_bars, spy_up = _uptrend_pair()
-    up_quote = {
-        "price": stock_bars[-1]["close"],
-        "marketCap": 80_000_000_000,
-        "quoteType": "EQUITY",
-        "exchangeName": "NasdaqGS",
-    }
-    up_short = evaluate(
-        {"symbol": "EXM", "name": "Example", "groups": ["us"], "sector": None, "industry": None},
-        stock_bars,
-        up_quote,
-        spy_up,
-        side="short",
-    )
-    assert up_short["passHard"] is False
-    assert "ma_stack" in up_short["failCodes"]
-    assert "ma_slope" in up_short["failCodes"]
-    assert "股價＜50＜150＜200" in up_short["failReasons"]
-    assert "均線未全部向下" in up_short["failReasons"]
-
-    # Same gates as the matching long market: HK floor still applies on the short side.
-    tiny = evaluate(
-        base,
-        bars,
-        {**quote, "marketCap": 5_000_000_000},
-        spy_bars,
-        side="short",
-        min_market_cap=10_000_000_000,
-        cap_fail_label="市值不足100億港元或未明",
-    )
-    assert tiny["passHard"] is False
-    assert "cap" in tiny["failCodes"]
-    assert tiny["failReasons"][-1] == "市值不足100億港元或未明" or "市值不足100億港元或未明" in tiny["failReasons"]
-
-
-def test_long_fail_labels_unchanged():
-    assert FAILS["ma_stack"] == "股價＞50＞150＞200"
-    assert FAILS["ma_slope"] == "均線未全部向上"
-
-
-def test_screen_cache_keeps_long_and_short_apart():
-    import gzip
-    import json
-
-    from app import screen_cache
-
-    screen_cache.invalidate()
+    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
+    store_mod.init_db()
+    engine = Engine()
     snapshot = {
-        "meta": {
-            "refreshedAt": "2026-11-05T00:00:00+00:00",
-            "summary": {"pass": 1, "failMaStack": 1},
-            "summaryShort": {"pass": 1, "failMaStack": 9},
-        },
+        "meta": {"criteria": {}, "summary": {"pass": 1}, "universe": {"unique": 1, "evaluated": 1}},
         "rows": [
-            {"symbol": "LONG", "passHard": True, "score": 80},
-            {"symbol": "NOPE", "passHard": False, "score": 1},
-        ],
-        "rowsShort": [
-            {"symbol": "SHORT", "passHard": True, "score": 70},
-            {"symbol": "STILL", "passHard": False, "score": 2},
+            {
+                "symbol": "NEEDY",
+                "passHard": True,
+                "score": 80,
+                "failCodes": [],
+                "industry": None,
+                "industryEn": None,
+                "sector": None,
+                "sectorEn": None,
+                "closeAtSupport": False,
+                "rs1w": 0.01,
+                "rs20": 0.02,
+            }
         ],
     }
-    refresh = {"running": False, "progress": 100, "message": "更新完成", "error": None}
-    screen_cache.rebuild(snapshot, refresh, stale=False, market="us", side="long")
-    screen_cache.rebuild(snapshot, refresh, stale=False, market="us", side="short")
-    long_resp = screen_cache.try_warm_response(
-        include="pass", refresh=refresh, stale=False, accept_encoding="gzip", market="us", side="long"
-    )
-    short_resp = screen_cache.try_warm_response(
-        include="pass", refresh=refresh, stale=False, accept_encoding="gzip", market="us", side="short"
-    )
-    long_payload = json.loads(gzip.decompress(long_resp.body))
-    short_payload = json.loads(gzip.decompress(short_resp.body))
-    assert [row["symbol"] for row in long_payload["rows"]] == ["LONG"]
-    assert [row["symbol"] for row in short_payload["rows"]] == ["SHORT"]
-    assert long_payload["meta"]["side"] == "long"
-    assert short_payload["meta"]["side"] == "short"
-    assert short_payload["meta"]["summary"]["pass"] == 1
-    assert short_payload["meta"]["summary"]["failMaStack"] == 9
-    # Rebuilding long must drop the short bytes so a later short read cannot reuse them.
-    screen_cache.rebuild(snapshot, refresh, stale=False, market="us", side="long")
-    assert screen_cache.has_entry("pass", market="us", side="long")
-    assert not screen_cache.has_entry("pass", market="us", side="short")
+    store_mod.save_snapshot(snapshot)
+    calls = []
 
+    def fake_enrich(rows, *, fetch_missing=True, **kwargs):
+        calls.append({"n": len(rows), "fetch_missing": fetch_missing})
+        return 0
 
-def test_close_at_resistance_mirrors_support_shape():
-    from app.close_at_support import detect_close_at_resistance
-    from app.levels import merge_flagged_resistance
+    started = []
 
-    support_bars = _close_at_support_bars()
-    # Reflect prices so the former support trough becomes a resistance ceiling.
-    bars = []
-    for bar in support_bars:
-        reflected = {
-            **bar,
-            "open": round(200 - bar["open"], 4),
-            "high": round(200 - bar["low"], 4),
-            "low": round(200 - bar["high"], 4),
-            "close": round(200 - bar["close"], 4),
-        }
-        bars.append(reflected)
-    matched, note, flagged = detect_close_at_resistance(bars)
-    assert matched is True
-    assert note and note.startswith("收市近阻力")
-    assert flagged is not None
-    assert flagged["zoneLow"] <= bars[-1]["close"] <= flagged["zoneHigh"]
-    levels = merge_flagged_resistance(find_levels(bars), flagged)
-    resistance = [item for item in levels if item["kind"] == "resistance"]
-    assert any(abs(item["price"] - flagged["price"]) / flagged["price"] < 0.02 for item in resistance)
+    monkeypatch.setattr(engine, "_enrich_rows_with_profiles", fake_enrich)
+    monkeypatch.setattr(engine, "start_industry_backfill", lambda: started.append(True) or True)
+    monkeypatch.setattr(engine, "_backfill_close_at_support", lambda snap: None)
+    monkeypatch.setattr(engine, "_backfill_score_rules", lambda snap: None)
+
+    out = engine.prepare_snapshot()
+    assert out is not None
+    assert calls and all(c["fetch_missing"] is False for c in calls)
+    assert started == [True]

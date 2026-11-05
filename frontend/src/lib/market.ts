@@ -78,13 +78,3 @@ export const MARKETS: Record<MarketId, MarketCopy> = {
 export function marketFromPath(pathname: string): MarketId {
   return pathname === "/hk" || pathname.startsWith("/hk/") ? "hk" : "us"
 }
-
-export function stockHref(copy: MarketCopy, symbol: string, side: "long" | "short"): string {
-  const path = copy.stockPath(symbol)
-  return side === "short" ? `${path}?side=short` : path
-}
-
-export function strategyHref(copy: MarketCopy, side: "long" | "short"): string {
-  const path = `${copy.basePath}/strategy` || "/strategy"
-  return side === "short" ? `${path}?side=short` : path
-}
