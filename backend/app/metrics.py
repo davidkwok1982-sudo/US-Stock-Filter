@@ -11,8 +11,6 @@ MIN_MARKET_CAP = 2_000_000_000
 MIN_DOLLAR_VOLUME = 30_000_000
 MIN_BETA = 1.0
 NEAR_HIGH_WITHIN = 0.25
-BREADTH_BULLISH = 200
-BREADTH_CAUTIOUS = 100
 
 SMA_ULTRA = 10
 SMA_SHORT = 20
@@ -234,24 +232,6 @@ def build_score(
     total = sum(part["points"] for part in parts)
     return min(100, total), parts
 
-
-def breadth(count: int) -> dict:
-    if count >= BREADTH_BULLISH:
-        tone = "bullish"
-        label = "通過家數達 200 或以上，廣度偏多"
-    elif count < BREADTH_CAUTIOUS:
-        tone = "cautious"
-        label = "通過家數少於 100，廣度宜審慎"
-    else:
-        tone = "neutral"
-        label = "通過家數介乎 100 至 199，廣度中性"
-    return {
-        "tone": tone,
-        "label": label,
-        "count": count,
-        "bullishAt": BREADTH_BULLISH,
-        "cautiousBelow": BREADTH_CAUTIOUS,
-    }
 
 
 def is_otc(exchange: str | None, exchange_name: str | None) -> bool:

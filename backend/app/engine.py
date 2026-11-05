@@ -13,7 +13,7 @@ from app.close_at_support import RULE_VERSION, detect_close_at_support
 from app.evaluate import evaluate, spy_snapshot, summarize
 from app.labels import industry_zh, sector_zh
 from app.levels import find_levels, merge_flagged_support
-from app.metrics import SCORE_RULE_VERSION, SMA_FAST, SMA_MID, SMA_SHORT, SMA_SLOW, SMA_ULTRA, breadth, rolling_sma
+from app.metrics import SCORE_RULE_VERSION, SMA_FAST, SMA_MID, SMA_SHORT, SMA_SLOW, SMA_ULTRA, rolling_sma
 from app.notes import build_notes
 from app import store
 from app.universe import load_universe
@@ -214,7 +214,6 @@ class Engine:
                     "partial": partial,
                 },
                 "summary": summary,
-                "breadth": breadth(summary["pass"]),
                 "spy": spy_snapshot(spy_bars),
                 "source": "Yahoo Finance 圖表與報價（免費公開接口，無需 API 金鑰）",
                 "dollarVolumeMethod": "優先取過去63個交易日的未還原收市價乘成交量之平均；不足則用三個月平均成交量乘現價。流動性只作評分，不作硬性門檻。",
@@ -226,8 +225,6 @@ class Engine:
                     "nearHighWithin": 0.25,
                     "closeAtSupportRuleVersion": RULE_VERSION,
                     "scoreRuleVersion": SCORE_RULE_VERSION,
-                    "breadthBullish": 200,
-                    "breadthCautiousBelow": 100,
                 },
             },
             "rows": rows,
@@ -356,7 +353,6 @@ class Engine:
         if spy_bars:
             meta["spy"] = spy_snapshot(spy_bars)
             meta["summary"] = summarize(updated)
-            meta["breadth"] = breadth(meta["summary"]["pass"])
         criteria = meta.setdefault("criteria", {})
         criteria["scoreRuleVersion"] = SCORE_RULE_VERSION
         criteria.pop("minBeta", None)

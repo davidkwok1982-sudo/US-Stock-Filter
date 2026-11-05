@@ -9,7 +9,6 @@ from app.evaluate import evaluate
 from app.levels import find_levels
 from app.metrics import (
     SCORE_MAX,
-    breadth,
     points_distance,
     points_liquidity,
     points_near_high,
@@ -123,11 +122,6 @@ def test_score_edges():
     assert points_liquidity(30_000_000) == 4
     assert points_liquidity(240_000_000) == 10
 
-
-def test_breadth_bands():
-    assert breadth(200)["tone"] == "bullish"
-    assert breadth(100)["tone"] == "neutral"
-    assert breadth(99)["tone"] == "cautious"
 
 
 def test_uptrend_passes_stage_two():

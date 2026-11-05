@@ -73,12 +73,6 @@ export function StrategyPage() {
         </ul>
       </section>
 
-      <section className="space-y-3 text-sm leading-relaxed">
-        <h2 className="font-heading text-2xl">廣度提示</h2>
-        <p>
-          通過家數達 200 或以上，標成廣度偏多；少於 100，標成宜審慎；介乎其中則為中性。這組數字來自公開文章的經驗講法。本站統計全美上市普通股（已剔除 ADR 與 ETF）裡通過篩選的家數，可讀成這批股份的廣度觀察，不是整個市場的唯一度量。
-        </p>
-      </section>
 
       <section className="space-y-3 text-sm leading-relaxed">
         <h2 className="font-heading text-2xl">數據與股票池</h2>

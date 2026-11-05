@@ -103,13 +103,6 @@ export type ScreenMeta = {
     failType: number
     microOrOtc: number
   }
-  breadth: {
-    tone: "bullish" | "neutral" | "cautious"
-    label: string
-    count: number
-    bullishAt: number
-    cautiousBelow: number
-  }
   spy: {
     symbol: string
     price: number | null

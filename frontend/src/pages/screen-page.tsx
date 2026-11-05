@@ -66,23 +66,19 @@ export function ScreenPage() {
       {ready && data?.meta ? (
         <>
           <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="text-xs tracking-[0.16em] text-muted-foreground">第二階段通過</p>
-                <p className="font-heading text-5xl leading-none font-semibold">
-                  {passCount}
-                  <span className="ml-2 text-lg font-normal text-muted-foreground">隻</span>
-                </p>
-              </div>
-              <p className={`max-w-sm text-sm ${breadthClass(data.meta.breadth.tone)}`}>{data.meta.breadth.label}</p>
+            <div>
+              <p className="text-xs tracking-[0.16em] text-muted-foreground">第二階段通過</p>
+              <p className="font-heading text-5xl leading-none font-semibold">
+                {passCount}
+                <span className="ml-2 text-lg font-normal text-muted-foreground">隻</span>
+              </p>
             </div>
-            <BreadthMeter count={passCount} />
             <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
               股票池為全美上市普通股（已剔除 ADR 與 ETF），目前 {data.meta.universe.unique} 隻
               {data.meta.universe.evaluated != null && data.meta.universe.evaluated !== data.meta.universe.unique
                 ? `（已評估 ${data.meta.universe.evaluated}）`
                 : ""}
-              。200／100 沿用公開文章的經驗數字，只作觀察。
+              。
               SPY 近一星期 {formatPct(data.meta.spy.ret1w ?? data.meta.spy.ret6m)}。
             </p>
             <dl className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
@@ -185,35 +181,6 @@ function Stat({ label, value }: { label: string; value: number }) {
       <dd className="num text-sm text-foreground">{value}</dd>
     </div>
   )
-}
-
-function BreadthMeter({ count }: { count: number }) {
-  const marker = Math.max(0, Math.min(100, (count / 300) * 100))
-  return (
-    <div className="mt-5">
-      <div className="relative h-2 bg-secondary">
-        <div className="absolute inset-y-0 left-0 w-1/3 bg-[#cfc3ae]" />
-        <div className="absolute inset-y-0 left-1/3 w-1/3 bg-[#b08958]" />
-        <div className="absolute inset-y-0 left-2/3 right-0 bg-brass" />
-        <div
-          className="absolute top-1/2 size-3 -translate-y-1/2 rounded-full border border-background bg-foreground"
-          style={{ left: `calc(${marker}% - 6px)` }}
-        />
-      </div>
-      <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
-        <span>0 審慎</span>
-        <span>100</span>
-        <span>200 偏多</span>
-        <span>300</span>
-      </div>
-    </div>
-  )
-}
-
-function breadthClass(tone: "bullish" | "neutral" | "cautious"): string {
-  if (tone === "bullish") return "text-up"
-  if (tone === "cautious") return "text-down"
-  return "text-brass"
 }
 
 function LoadingState({ message, progress }: { message: string; progress: number }) {
