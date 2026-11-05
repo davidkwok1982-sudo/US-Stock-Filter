@@ -26,7 +26,7 @@ from app.metrics import (
 )
 
 FAILS = {
-    "ma_stack": "50＞150＞200",
+    "ma_stack": "股價＞50＞150＞200",
     "ma_slope": "均線未全部向上",
     "cap": "市值不足20億美元或未明",
     "otc": "場外交易",
@@ -109,10 +109,11 @@ def evaluate(
 
     fail_codes: list[str] = []
     stack_ok = (
-        sma50 is not None
+        price is not None
+        and sma50 is not None
         and sma150 is not None
         and sma200 is not None
-        and sma50 > sma150 > sma200
+        and price > sma50 > sma150 > sma200
     )
     if not stack_ok:
         fail_codes.append("ma_stack")

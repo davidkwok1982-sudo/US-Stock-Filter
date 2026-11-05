@@ -12,7 +12,7 @@ STRATEGIES = [
         "id": "jlaw-stage2",
         "name": "階律篩選",
         "status": "active",
-        "summary": "第二階段條件：50＞150＞200、三條均線向上、市值逾20億美元。股票池為全美上市普通股（剔除 ADR 與 ETF）。",
+        "summary": "第二階段條件：現價＞50＞150＞200、三條均線向上、市值逾20億美元。股票池為全美上市普通股（剔除 ADR 與 ETF）。",
     },
     {
         "id": "minervini",

@@ -260,7 +260,7 @@ export function StockPage() {
           </dl>
 
           <ul className="flex flex-wrap gap-2 text-sm">
-            <Gate label="50＞150＞200" ok={!row.failCodes.includes("ma_stack") && (row.maStacked ?? row.aboveSma200)} />
+            <Gate label="價＞50＞150＞200" ok={!row.failCodes.includes("ma_stack") && (row.maStacked ?? row.aboveSma200)} />
             <Gate label="均線向上" ok={!row.failCodes.includes("ma_slope") && row.slopeUp} />
             <Gate label="市值逾20億" ok={!row.failCodes.includes("cap")} />
           </ul>
