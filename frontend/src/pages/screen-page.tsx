@@ -120,11 +120,11 @@ export function ScreenPage() {
               SPY 近一星期 {formatPct(data.meta.spy.ret1w ?? data.meta.spy.ret6m)}。
             </p>
             <dl className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
-              <Stat label="股價＞50＞150＞200" value={data.meta.summary.failMaStack ?? data.meta.summary.failSma200} />
+              <Stat label="未符合股價＞50＞150＞200" value={data.meta.summary.failMaStack ?? data.meta.summary.failSma200} />
               <Stat label="均線未全部向上" value={data.meta.summary.failMaSlope ?? 0} />
               <Stat label="市值不足或未明" value={data.meta.summary.failCap} />
             </dl>
-            <p className="mt-2 text-[11px] text-muted-foreground">同一股份可計入多於一項。硬性條件通過與否，不受下面的可選收緊影響。</p>
+            <p className="mt-2 text-[11px] text-muted-foreground">以上為未通過硬性條件的家數；同一股份可計入多於一項。硬性條件通過與否，不受下面的可選收緊影響。</p>
           </section>
 
           {leaders.length > 0 ? (
