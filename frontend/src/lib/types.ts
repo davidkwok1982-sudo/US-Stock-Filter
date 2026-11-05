@@ -220,6 +220,7 @@ export type StockDetail = {
 export type SortKey =
   | "symbol"
   | "name"
+  | "industry"
   | "price"
   | "changePct"
   | "marketCap"

@@ -15,11 +15,13 @@ import {
   formatUsdLabeled,
   toneClass,
 } from "@/lib/format.ts"
+import { industryLabel } from "@/lib/filters.ts"
 import type { ScreenRow, SortKey } from "@/lib/types.ts"
 
 const COLUMNS: { key: SortKey; label: string; tip: string; align: "left" | "right" }[] = [
   { key: "symbol", label: "代號", tip: "美股代號", align: "left" },
   { key: "name", label: "名稱", tip: "公司名稱", align: "left" },
+  { key: "industry", label: "行業", tip: "行業分類（優先中文標籤）", align: "left" },
   { key: "price", label: "現價", tip: "最近報價，美元", align: "right" },
   { key: "changePct", label: "升跌", tip: "較上一個收市", align: "right" },
   { key: "marketCap", label: "市值", tip: "美元市值", align: "right" },
@@ -83,6 +85,9 @@ export function ScreenTable({
               >
                 <TableCell className="font-medium">{row.symbol}</TableCell>
                 <TableCell className="max-w-48 truncate text-muted-foreground">{row.name}</TableCell>
+                <TableCell className="max-w-40 truncate text-muted-foreground">
+                  {industryLabel(row) || "—"}
+                </TableCell>
                 <TableCell className="num text-right">{formatPrice(row.price)}</TableCell>
                 <TableCell className={`num text-right ${toneClass(row.changePct)}`}>{formatPct(row.changePct, 2)}</TableCell>
                 <TableCell className="num text-right">{formatUsdLabeled(row.marketCap)}</TableCell>
@@ -118,6 +123,10 @@ export function ScreenTable({
                 <span className={`num ${toneClass(row.changePct)}`}>{formatPct(row.changePct, 2)}</span>
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <div className="col-span-2 flex justify-between gap-2">
+                  <dt>行業</dt>
+                  <dd className="truncate text-foreground">{industryLabel(row) || "—"}</dd>
+                </div>
                 <div className="flex justify-between gap-2">
                   <dt>市值</dt>
                   <dd className="num text-foreground">{formatUsdLabeled(row.marketCap)}</dd>

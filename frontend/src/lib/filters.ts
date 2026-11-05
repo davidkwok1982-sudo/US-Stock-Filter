@@ -1,8 +1,14 @@
 import type { Filters, ScreenRow, SortKey } from "./types.ts"
 
+/** Prefer zh industry label; fall back to EN. */
+export function industryLabel(row: ScreenRow): string {
+  return (row.industry?.trim() || row.industryEn?.trim() || "")
+}
+
 const SORTS = new Set<SortKey>([
   "symbol",
   "name",
+  "industry",
   "price",
   "changePct",
   "marketCap",
@@ -47,6 +53,15 @@ export function visibleRows(rows: ScreenRow[], filters: Filters): ScreenRow[] {
   })
   const direction = filters.dir === "asc" ? 1 : -1
   list.sort((left, right) => {
+    if (filters.sort === "industry") {
+      const a = industryLabel(left)
+      const b = industryLabel(right)
+      if (!a && !b) return left.symbol.localeCompare(right.symbol)
+      if (!a) return 1
+      if (!b) return -1
+      const compared = a.localeCompare(b, "zh-Hant")
+      return compared === 0 ? left.symbol.localeCompare(right.symbol) : compared * direction
+    }
     const a = left[filters.sort]
     const b = right[filters.sort]
     if (typeof a === "string" && typeof b === "string") {
