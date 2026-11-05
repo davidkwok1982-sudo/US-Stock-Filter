@@ -623,6 +623,73 @@ def test_industry_priority_includes_short_only_passers(tmp_path, monkeypatch):
     assert engine._needs_industry_backfill(snapshot) is True
 
 
+
+def test_industry_priority_empty_when_no_passers(tmp_path, monkeypatch):
+    """Do not fall back to the full universe — that would Yahoo-fetch thousands."""
+    from app.engine import Engine
+    from app import store as store_mod
+
+    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
+    engine = Engine()
+    rows = [
+        {"symbol": "A", "passHard": False, "score": 1, "industry": None, "industryEn": None, "sector": None, "sectorEn": None},
+        {"symbol": "B", "passHard": False, "score": 1, "industry": None, "industryEn": None, "sector": None, "sectorEn": None},
+    ]
+    short_rows = [{**row, "passHard": False} for row in rows]
+    assert engine._industry_priority_rows(rows, short_rows) == []
+    assert engine._needs_industry_backfill({"rows": rows, "rowsShort": short_rows}) is False
+
+
+def test_prepare_snapshot_defers_yahoo_industry_fetch(tmp_path, monkeypatch):
+    """Screen hot path must not wait on assetProfile network calls."""
+    from app.engine import Engine
+    from app import store as store_mod
+
+    monkeypatch.setattr(store_mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "DB_PATH", tmp_path / "market.sqlite")
+    store_mod.init_db()
+    engine = Engine()
+    snapshot = {
+        "meta": {"criteria": {}, "summary": {"pass": 1}, "universe": {"unique": 1, "evaluated": 1}},
+        "rows": [
+            {
+                "symbol": "NEEDY",
+                "passHard": True,
+                "score": 80,
+                "failCodes": [],
+                "industry": None,
+                "industryEn": None,
+                "sector": None,
+                "sectorEn": None,
+                "closeAtSupport": False,
+                "rs1w": 0.01,
+                "rs20": 0.02,
+            }
+        ],
+        "rowsShort": [],
+    }
+    store_mod.save_snapshot(snapshot)
+    calls = []
+
+    def fake_enrich(rows, *, fetch_missing=True, **kwargs):
+        calls.append({"n": len(rows), "fetch_missing": fetch_missing})
+        return 0
+
+    started = []
+
+    monkeypatch.setattr(engine, "_enrich_rows_with_profiles", fake_enrich)
+    monkeypatch.setattr(engine, "start_industry_backfill", lambda: started.append(True) or True)
+    # Skip unrelated backfills
+    monkeypatch.setattr(engine, "_backfill_close_at_support", lambda snap: None)
+    monkeypatch.setattr(engine, "_backfill_score_rules", lambda snap: None)
+
+    out = engine.prepare_snapshot()
+    assert out is not None
+    assert calls and all(c["fetch_missing"] is False for c in calls)
+    assert started == [True]
+
+
 def test_sync_short_labels_copies_industry_onto_short_passers(tmp_path, monkeypatch):
     from app.engine import Engine
     from app import store as store_mod

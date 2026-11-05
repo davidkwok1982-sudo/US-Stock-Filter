@@ -48,7 +48,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         // Keep polling while a refresh is running. US cold boot also auto-starts refresh.
         // HK cold boot waits for manual refresh — stop hammering once we know it is idle.
         if (next.refresh.running || (!next.ready && market === "us")) {
-          timer = window.setTimeout(() => void tick(), 1200)
+          timer = window.setTimeout(() => void tick(), 2500)
         }
       } catch (error) {
         if (stop) return
@@ -67,7 +67,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const result = await postRefresh(market)
-      if (!result.started && result.reason === "cooldown") {
+      if (!result.started && (result.reason === "cooldown" || result.reason === "busy")) {
         setData((current) =>
           current
             ? { ...current, refresh: { ...current.refresh, error: result.message, running: false } }

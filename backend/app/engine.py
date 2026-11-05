@@ -413,31 +413,24 @@ class Engine:
         ):
             self._backfill_score_rules(snapshot)
         if self._needs_industry_backfill(snapshot):
-            # FastAPI Cloud workers are short-lived; fill long+short passHard
-            # synchronously so both heatmaps are correct on the same response,
-            # then backfill the rest.
+            # Hobby: never block /api/screen on Yahoo assetProfile. Apply any
+            # already-cached fundamentals, then finish long∪short labels in a
+            # background thread so pass rows return immediately.
             priority = self._industry_priority_rows(
                 snapshot.get("rows") or [],
                 snapshot.get("rowsShort") or [],
             )
-            missing_pass = [row for row in priority if self._row_needs_industry(row)]
-            if missing_pass:
+            if priority:
                 self._enrich_rows_with_profiles(
-                    missing_pass,
-                    fetch_missing=True,
-                    pass_hard_first=True,
+                    priority,
+                    fetch_missing=False,
                     quiet=True,
                 )
                 self._sync_short_labels(
                     snapshot.get("rows") or [],
                     snapshot.get("rowsShort") or [],
                 )
-                meta = snapshot.setdefault("meta", {})
-                criteria = meta.setdefault("criteria", {})
-                criteria["industrySource"] = "yahoo-assetProfile"
-                store.save_snapshot(snapshot, market=self.mid)
-            if any(self._row_needs_industry(row) for row in snapshot["rows"]):
-                self.start_industry_backfill()
+            self.start_industry_backfill()
         return snapshot
 
     def screen(self, include: str = "pass") -> dict:
@@ -959,12 +952,11 @@ class Engine:
             for row in (short_rows or [])
             if row.get("passHard")
         }
-        targets = [
+        return [
             row
             for row in rows
             if row.get("passHard") or row.get("symbol") in short_pass
         ]
-        return targets or list(rows)
 
     def _needs_industry_backfill(self, snapshot: dict) -> bool:
         rows = snapshot.get("rows") or []

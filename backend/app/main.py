@@ -147,6 +147,13 @@ def refresh(force: bool = Query(default=False)):
     reason = cooldown_block(force)
     if reason and not engine.status()["running"]:
         return {"started": False, "reason": "cooldown", "message": reason, "refresh": engine.status()}
+    if engine_hk.status()["running"] and not engine.status()["running"]:
+        return {
+            "started": False,
+            "reason": "busy",
+            "message": "港股全量更新進行中，Hobby 實例負荷已滿。請等港股完成後再更新美股。",
+            "refresh": engine.status(),
+        }
     started = engine.start()
     return {
         "started": started,
@@ -203,6 +210,13 @@ def hk_refresh(force: bool = Query(default=False)):
     reason = cooldown_block(force, market="hk")
     if reason and not engine_hk.status()["running"]:
         return {"started": False, "reason": "cooldown", "message": reason, "refresh": engine_hk.status()}
+    if engine.status()["running"] and not engine_hk.status()["running"]:
+        return {
+            "started": False,
+            "reason": "busy",
+            "message": "美股全量更新進行中，Hobby 實例負荷已滿。請等美股完成後再更新港股。",
+            "refresh": engine_hk.status(),
+        }
     started = engine_hk.start()
     return {
         "started": started,
