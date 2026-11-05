@@ -6,28 +6,29 @@ DISCLAIMER = ""
 DISCLAIMER_LONG = ""
 
 
-def _px(value: float | None) -> str:
+def _px(value: float | None, *, currency: str = "USD") -> str:
     if value is None:
         return "未明"
+    prefix = "HK$" if currency == "HKD" else "US$"
     if abs(value) >= 1:
-        return f"US${value:,.2f}"
-    return f"US${value:.4f}"
+        return f"{prefix}{value:,.2f}"
+    return f"{prefix}{value:.4f}"
 
 
-def _usd(value: float | None) -> str:
+def _money(value: float | None, *, unit: str = "美元") -> str:
     if value is None:
         return "未明"
     sign = "-" if value < 0 else ""
     amount = abs(value)
     if amount >= 1e12:
-        return f"{sign}{amount / 1e12:.2f}萬億美元"
+        return f"{sign}{amount / 1e12:.2f}萬億{unit}"
     if amount >= 1e8:
         scaled = amount / 1e8
         digits = 2 if scaled < 10 else 1 if scaled < 100 else 0
-        return f"{sign}{scaled:.{digits}f}億美元"
+        return f"{sign}{scaled:.{digits}f}億{unit}"
     if amount >= 1e4:
-        return f"{sign}{amount / 1e4:,.0f}萬美元"
-    return f"{sign}{amount:,.0f}美元"
+        return f"{sign}{amount / 1e4:,.0f}萬{unit}"
+    return f"{sign}{amount:,.0f}{unit}"
 
 
 def _pct(value: float, digits: int = 1) -> str:
@@ -41,7 +42,14 @@ def _slope_phrase(name: str, slope: float | None) -> str:
     return f"{name}過去約一星期{verb} {_pct(slope)}。"
 
 
-def build_notes(row: dict, levels: list[dict]) -> dict:
+def build_notes(
+    row: dict,
+    levels: list[dict],
+    *,
+    benchmark_short: str = "SPY",
+    currency: str = "USD",
+    money_unit: str = "美元",
+) -> dict:
     technical: list[str] = []
     price = row.get("price")
     sma200 = row.get("sma200")
@@ -62,22 +70,22 @@ def build_notes(row: dict, levels: list[dict]) -> dict:
         )
         if stacked:
             technical.append(
-                f"現價 {_px(price)} 股價＞50＞150＞200（50 {_px(sma50)}、150 {_px(sma150)}、200 {_px(sma200)}）。{slope_bits}"
+                f"現價 {_px(price, currency=currency)} 股價＞50＞150＞200（50 {_px(sma50, currency=currency)}、150 {_px(sma150, currency=currency)}、200 {_px(sma200, currency=currency)}）。{slope_bits}"
             )
         else:
             technical.append(
-                f"現價 {_px(price)} 股價＞50＞150＞200（50 {_px(sma50)}、150 {_px(sma150)}、200 {_px(sma200)}）。{slope_bits}"
+                f"現價 {_px(price, currency=currency)} 股價＞50＞150＞200（50 {_px(sma50, currency=currency)}、150 {_px(sma150, currency=currency)}、200 {_px(sma200, currency=currency)}）。{slope_bits}"
             )
     elif price and sma200:
         distance = price / sma200 - 1
         slope = _slope_phrase("200天線", row.get("sma200Slope"))
         if distance > 0:
             technical.append(
-                f"現價 {_px(price)}，高於200天線 {_pct(distance)}。{slope}長期均線仍在股價下方。"
+                f"現價 {_px(price, currency=currency)}，高於200天線 {_pct(distance)}。{slope}長期均線仍在股價下方。"
             )
         else:
             technical.append(
-                f"現價 {_px(price)}，低於200天線 {_pct(distance)}。{slope}尚未符合第二階段的長期條件。"
+                f"現價 {_px(price, currency=currency)}，低於200天線 {_pct(distance)}。{slope}尚未符合第二階段的長期條件。"
             )
     else:
         technical.append("日線不足以計算均線堆疊，未能判斷是否處於第二階段。")
@@ -95,25 +103,25 @@ def build_notes(row: dict, levels: list[dict]) -> dict:
     if price and high_52:
         drawdown = price / high_52 - 1
         if drawdown >= -0.001:
-            high_bits.append(f"股價貼近階段高位（{_px(high_52)}）")
+            high_bits.append(f"股價貼近階段高位（{_px(high_52, currency=currency)}）")
         elif drawdown >= -0.25:
-            high_bits.append(f"距52週高位 {_pct(drawdown)}（高位 {_px(high_52)}），仍在25%觀察範圍內")
+            high_bits.append(f"距52週高位 {_pct(drawdown)}（高位 {_px(high_52, currency=currency)}），仍在25%觀察範圍內")
         else:
-            high_bits.append(f"較52週高位回落 {_pct(drawdown)}（高位 {_px(high_52)}），並未貼近高位")
+            high_bits.append(f"較52週高位回落 {_pct(drawdown)}（高位 {_px(high_52, currency=currency)}），並未貼近高位")
         if (row.get("barsCount") or 0) < 252:
             high_bits.append("現有日線不足一年，高位只覆蓋已下載數據")
     rs1w = row.get("rs1w")
     if rs1w is not None:
         if rs1w >= 0:
-            high_bits.append(f"近 5 個交易日回報較 SPY 高出 {rs1w * 100:.1f} 個百分點")
+            high_bits.append(f"近 5 個交易日回報較{benchmark_short}高出 {rs1w * 100:.1f} 個百分點")
         else:
-            high_bits.append(f"近 5 個交易日回報落後 SPY {abs(rs1w) * 100:.1f} 個百分點，相對強度偏弱")
+            high_bits.append(f"近 5 個交易日回報落後{benchmark_short}{abs(rs1w) * 100:.1f} 個百分點，相對強度偏弱")
     rs20 = row.get("rs20")
     if rs20 is not None:
         if rs20 >= 0:
-            high_bits.append(f"近 20 個交易日回報較 SPY 高出 {rs20 * 100:.1f} 個百分點")
+            high_bits.append(f"近 20 個交易日回報較{benchmark_short}高出 {rs20 * 100:.1f} 個百分點")
         else:
-            high_bits.append(f"近 20 個交易日回報落後 SPY {abs(rs20) * 100:.1f} 個百分點")
+            high_bits.append(f"近 20 個交易日回報落後{benchmark_short}{abs(rs20) * 100:.1f} 個百分點")
     if high_bits:
         technical.append("，".join(high_bits) + "。")
 
@@ -124,19 +132,19 @@ def build_notes(row: dict, levels: list[dict]) -> dict:
         if dollar >= 100_000_000:
             quality = "流動性充足"
         elif dollar >= 30_000_000:
-            quality = "高於3,000萬美元的每日成交額門檻"
+            quality = f"高於3,000萬{money_unit}的每日成交額門檻"
         else:
-            quality = "未達3,000萬美元的每日成交額門檻"
+            quality = f"未達3,000萬{money_unit}的每日成交額門檻"
         prefix = window if row.get("dollarVolumeBasis") == "63d" else "按報價估算，"
-        flow.append(f"{prefix}平均每日成交額約 {_usd(dollar)}，{quality}")
+        flow.append(f"{prefix}平均每日成交額約 {_money(dollar, unit=money_unit)}，{quality}")
     supports = [level for level in levels if level["kind"] == "support"]
     resistance = [level for level in levels if level["kind"] == "resistance"]
     if supports:
         nearest = supports[0]
-        flow.append(f"下方較近{nearest['label']}約 {_px(nearest['price'])}")
+        flow.append(f"下方較近{nearest['label']}約 {_px(nearest['price'], currency=currency)}")
     if resistance:
         nearest = resistance[0]
-        flow.append(f"上方較近{nearest['label']}約 {_px(nearest['price'])}")
+        flow.append(f"上方較近{nearest['label']}約 {_px(nearest['price'], currency=currency)}")
     if flow:
         technical.append("。".join(flow) + "。")
 

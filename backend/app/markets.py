@@ -20,11 +20,13 @@ class MarketConfig:
     subtitle: str
     benchmark: str
     benchmark_label: str
+    benchmark_short: str
     min_market_cap: float
     micro_cap: float
     penny_price: float
     cap_fail_label: str
     market_cap_currency: str
+    money_unit: str
     market_cap_note: str
     rs_score_label: str
     equity_only_message: str
@@ -40,11 +42,13 @@ US_MARKET = MarketConfig(
     subtitle="美股第二階段觀察台",
     benchmark="SPY",
     benchmark_label="標普500（SPY）",
+    benchmark_short="SPY",
     min_market_cap=float(US_MIN_MARKET_CAP),
     micro_cap=300_000_000,
     penny_price=5.0,
     cap_fail_label="市值不足20億美元或未明",
     market_cap_currency="USD",
+    money_unit="美元",
     market_cap_note="市值門檻 20 億美元（Yahoo marketCap，美元）。",
     rs_score_label="一星期相對 SPY",
     equity_only_message="這不是美股普通股",
@@ -60,11 +64,13 @@ HK_MARKET = MarketConfig(
     subtitle="港股第二階段觀察台",
     benchmark="^HSI",
     benchmark_label="恆生指數（HSI）",
+    benchmark_short="恆指",
     min_market_cap=float(HK_MIN_MARKET_CAP),
     micro_cap=float(HK_MICRO_CAP),
     penny_price=float(HK_PENNY_PRICE),
     cap_fail_label="市值不足150億港元或未明",
     market_cap_currency="HKD",
+    money_unit="港元",
     market_cap_note=(
         "市值門檻 150 億港元（約等同美股 20 億美元精神門檻）。"
         "Yahoo 對 .HK 普通股的 marketCap 通常以港元計；本站按港元直接比較，不作即時匯率換算。"

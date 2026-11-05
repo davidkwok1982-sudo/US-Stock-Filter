@@ -491,7 +491,13 @@ class Engine:
             )
             if matched and flagged:
                 levels = merge_flagged_support(levels, flagged)
-        notes = build_notes(detail_row, levels)
+        notes = build_notes(
+            detail_row,
+            levels,
+            benchmark_short=self.market.benchmark_short,
+            currency=self.market.market_cap_currency,
+            money_unit=self.market.money_unit,
+        )
         if fundamentals is None:
             profile_pending = True
         elif fundamentals.get("_summaryFetched") or "summary" in fundamentals:
@@ -542,7 +548,13 @@ class Engine:
             detail_row.pop("beta", None)
             detail_row.pop("betaBasis", None)
         detail_row, profile = self._detail_row_and_profile(detail_row, fundamentals)
-        notes = build_notes(detail_row, [])
+        notes = build_notes(
+            detail_row,
+            [],
+            benchmark_short=self.market.benchmark_short,
+            currency=self.market.market_cap_currency,
+            money_unit=self.market.money_unit,
+        )
         return {
             "row": {
                 "symbol": detail_row.get("symbol"),
