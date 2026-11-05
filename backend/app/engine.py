@@ -231,11 +231,11 @@ class Engine:
             "rows": rows,
         }
 
-    def screen(self) -> dict:
+    def prepare_snapshot(self) -> dict | None:
+        """Load snapshot and apply one-shot backfills. Returns None when cache is empty."""
         snapshot = store.load_snapshot()
-        refresh = self.status()
         if snapshot is None:
-            return {"ready": False, "stale": False, "meta": None, "rows": [], "refresh": refresh}
+            return None
         meta = snapshot.get("meta") or {}
         criteria = meta.get("criteria") or {}
         if (
@@ -269,8 +269,19 @@ class Engine:
                 store.save_snapshot(snapshot)
             if any(self._row_needs_industry(row) for row in snapshot["rows"]):
                 self.start_industry_backfill()
+        return snapshot
+
+    def screen(self, include: str = "pass") -> dict:
+        """Return screen payload. Default include=pass (passHard rows only); include=all for full universe."""
+        refresh = self.status()
+        snapshot = self.prepare_snapshot()
+        if snapshot is None:
+            return {"ready": False, "stale": False, "meta": None, "rows": [], "refresh": refresh}
+        include_all = include == "all"
         slim = []
         for row in snapshot["rows"]:
+            if not include_all and not row.get("passHard"):
+                continue
             item = dict(row)
             item.pop("scoreParts", None)
             item.pop("beta", None)

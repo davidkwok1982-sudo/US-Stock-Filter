@@ -7,14 +7,14 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.engine import cooldown_block, engine
-from app import store
+from app import screen_cache, store
 from app.strategies import STRATEGIES, get_strategy
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -31,11 +31,16 @@ async def lifespan(_app: FastAPI):
     elif engine._needs_industry_backfill(snapshot):
         log.info("screen cache missing industry labels; starting backfill")
         engine.start_industry_backfill()
+    if snapshot is not None:
+        try:
+            screen_cache.rebuild(snapshot, engine.status(), store.is_stale(snapshot))
+        except Exception as exc:
+            log.warning("startup screen cache rebuild failed: %s", exc)
     yield
 
 
 app = FastAPI(title="階律", lifespan=lifespan)
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=1)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -55,13 +60,30 @@ def strategies():
 
 
 @app.get("/api/screen")
-def screen(strategy: str = "jlaw-stage2"):
+def screen(
+    request: Request,
+    strategy: str = "jlaw-stage2",
+    include: str = Query(default="pass", pattern="^(pass|all)$"),
+):
+    """Default: passHard rows + meta.summary. Pass ?include=all for the full universe."""
     chosen = get_strategy(strategy)
     if chosen is None:
         raise HTTPException(status_code=404, detail="沒有這個策略")
     if chosen["status"] != "active":
         raise HTTPException(status_code=501, detail="此策略尚未推出")
-    return engine.screen()
+    snapshot = engine.prepare_snapshot()
+    refresh = engine.status()
+    if snapshot is None:
+        return {"ready": False, "stale": False, "meta": None, "rows": [], "refresh": refresh}
+    stale = store.is_stale(snapshot)
+    # Prefer pre-gzipped wire cache rebuilt on save_snapshot; serve bytes fast.
+    return screen_cache.response(
+        snapshot=snapshot,
+        refresh=refresh,
+        stale=stale,
+        include=include,
+        accept_encoding=request.headers.get("accept-encoding"),
+    )
 
 
 @app.post("/api/refresh")

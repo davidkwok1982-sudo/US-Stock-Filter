@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import json
+import logging
+import threading
 import sqlite3
 import zlib
 from datetime import datetime, timezone
 
 from app.config import CACHE_DIR, DB_PATH, TTL_HOURS
+
+log = logging.getLogger("kailut")
+
+_mem_lock = threading.Lock()
+_mem_snapshot: dict | None = None
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS kv (
@@ -71,6 +78,24 @@ def _unpack(blob: bytes) -> list[dict]:
     return bars
 
 
+
+def _refresh_screen_cache(snapshot: dict) -> None:
+    """Rebuild in-memory pre-serialized /api/screen payloads after snapshot writes."""
+    try:
+        from app.screen_cache import rebuild
+        from app.engine import engine
+
+        rebuild(snapshot, engine.status(), is_stale(snapshot))
+    except Exception as exc:  # pragma: no cover - cache must never break persistence
+        log.warning("screen cache rebuild failed: %s", exc)
+        try:
+            from app.screen_cache import invalidate
+
+            invalidate()
+        except Exception:
+            pass
+
+
 def save_refresh(snapshot: dict, charts: dict[str, list[dict]]) -> None:
     init_db()
     encoded = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
@@ -81,6 +106,10 @@ def save_refresh(snapshot: dict, charts: dict[str, list[dict]]) -> None:
         conn.executemany("INSERT INTO charts (symbol, payload) VALUES (?, ?)", rows)
         conn.execute("INSERT OR REPLACE INTO kv (k, v) VALUES ('snapshot', ?)", (encoded,))
         conn.commit()
+    global _mem_snapshot
+    with _mem_lock:
+        _mem_snapshot = snapshot
+    _refresh_screen_cache(snapshot)
 
 
 def save_snapshot(snapshot: dict) -> None:
@@ -90,15 +119,26 @@ def save_snapshot(snapshot: dict) -> None:
     with _connect() as conn:
         conn.execute("INSERT OR REPLACE INTO kv (k, v) VALUES ('snapshot', ?)", (encoded,))
         conn.commit()
+    global _mem_snapshot
+    with _mem_lock:
+        _mem_snapshot = snapshot
+    _refresh_screen_cache(snapshot)
 
 
 def load_snapshot() -> dict | None:
+    global _mem_snapshot
+    with _mem_lock:
+        if _mem_snapshot is not None:
+            return _mem_snapshot
     init_db()
     with _connect() as conn:
         row = conn.execute("SELECT v FROM kv WHERE k = 'snapshot'").fetchone()
     if row is None:
         return None
-    return json.loads(row["v"])
+    snapshot = json.loads(row["v"])
+    with _mem_lock:
+        _mem_snapshot = snapshot
+    return snapshot
 
 
 def load_chart(symbol: str) -> list[dict] | None:
