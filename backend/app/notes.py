@@ -38,7 +38,7 @@ def _slope_phrase(name: str, slope: float | None) -> str:
     if slope is None:
         return ""
     verb = "上升" if slope > 0 else "回落" if slope < 0 else "走平"
-    return f"{name}過去約一個月{verb} {_pct(slope)}。"
+    return f"{name}過去約一星期{verb} {_pct(slope)}。"
 
 
 def build_notes(row: dict, levels: list[dict]) -> dict:

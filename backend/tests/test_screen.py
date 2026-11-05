@@ -9,6 +9,7 @@ from app.evaluate import FAILS, evaluate
 from app.levels import find_levels
 from app.metrics import (
     SCORE_MAX,
+    SLOPE_LOOKBACK,
     points_distance,
     points_liquidity,
     points_near_high,
@@ -106,6 +107,10 @@ def _uptrend_pair(n: int = 280):
 
 def test_score_weights_sum_to_100():
     assert sum(SCORE_MAX.values()) == 100
+
+
+def test_slope_lookback_is_about_one_week():
+    assert SLOPE_LOOKBACK == 5
 
 
 def test_score_edges():
@@ -276,6 +281,8 @@ def test_notes_omit_disclaimer_and_beta():
     assert notes["disclaimer"] == ""
     assert "非投資建議" not in notes["disclaimer"]
     assert "貝他" not in " ".join(notes["technical"])
+    assert "過去約一星期" in " ".join(notes["technical"])
+    assert "過去約一個月" not in " ".join(notes["technical"])
     assert 2 <= len(notes["technical"]) <= 4
     assert 1 <= len(notes["fundamental"]) <= 2
     joined = " ".join(notes["technical"] + notes["fundamental"])
