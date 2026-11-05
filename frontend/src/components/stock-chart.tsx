@@ -393,14 +393,14 @@ export function StockChart({
 
 
 /** Initial viewport by timeframe; full series stays loaded for zoom-out/pan.
- * 日線 ~3 months, 週線 ~1 year, 小時 ~1 week.
+ * 日線 ~6 months (近6個月), 週線 ~1 year, 小時 ~1 week.
  */
 function defaultVisibleCutoff(interval: ChartInterval): ChartTime {
   const now = Date.now()
   if (interval === "1h") {
     return Math.floor(now / 1000) - 7 * 24 * 3600
   }
-  const days = interval === "1wk" ? 372 : 95
+  const days = interval === "1wk" ? 372 : 186
   const date = new Date()
   date.setDate(date.getDate() - days)
   return date.toISOString().slice(0, 10)
