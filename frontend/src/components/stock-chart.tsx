@@ -6,6 +6,7 @@ import {
   LineSeries,
   LineStyle,
   createChart,
+  type MouseEventParams,
   type Time,
 } from "lightweight-charts"
 
@@ -44,9 +45,11 @@ export function StockChart({
   symbol?: string
 }) {
   const host = useRef<HTMLDivElement>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const element = host.current
+    const tooltipEl = tooltipRef.current
     if (!element || bars.length === 0) return
     // Load full series; initial viewport is a sliced window (zoom/pan can reveal the rest).
     const candles = bars
@@ -246,10 +249,113 @@ export function StockChart({
     }
 
     applyDefaultVisibleRange(chart, candles, interval)
-    return () => chart.remove()
+
+    // OHLC + change% popup via lightweight-charts crosshair move.
+    const barByTime = new Map<string, { bar: Bar; prevClose: number | null }>()
+    for (let i = 0; i < candles.length; i++) {
+      const bar = candles[i]!
+      const prev = i > 0 ? candles[i - 1]!.close : null
+      barByTime.set(timeKey(bar.time), { bar, prevClose: prev })
+    }
+
+    const hideTooltip = () => {
+      if (!tooltipEl) return
+      tooltipEl.style.display = "none"
+    }
+
+    const onCrosshairMove = (param: MouseEventParams<Time>) => {
+      if (!tooltipEl) return
+      if (
+        param.point === undefined ||
+        param.time === undefined ||
+        param.point.x < 0 ||
+        param.point.y < 0
+      ) {
+        hideTooltip()
+        return
+      }
+
+      const raw = param.seriesData.get(candle)
+      if (
+        !raw ||
+        !("open" in raw) ||
+        !("high" in raw) ||
+        !("low" in raw) ||
+        !("close" in raw) ||
+        raw.open == null ||
+        raw.high == null ||
+        raw.low == null ||
+        raw.close == null
+      ) {
+        hideTooltip()
+        return
+      }
+
+      const open = raw.open
+      const high = raw.high
+      const low = raw.low
+      const close = raw.close
+      const barTime = ("time" in raw && raw.time != null ? raw.time : param.time) as ChartTime
+      const keyed = barByTime.get(timeKey(barTime))
+      const prevClose = keyed?.prevClose ?? null
+      const changePct =
+        prevClose != null && prevClose > 0 ? ((close - prevClose) / prevClose) * 100 : null
+      const up = changePct == null ? close >= open : changePct >= 0
+      const changeColor = up ? UP : DOWN
+      const changeText =
+        changePct == null
+          ? "—"
+          : `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`
+
+      const row = (label: string, value: string, color?: string) =>
+        `<div style="display:flex;justify-content:space-between;gap:12px">` +
+        `<span style="color:#a39e93">${label}</span>` +
+        `<span${color ? ` style="color:${color}"` : ""}>${value}</span></div>`
+
+      const timeLabel = formatTooltipTime(barTime, interval)
+      tooltipEl.innerHTML =
+        `<div style="margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.1);font-size:10px;letter-spacing:0.04em;color:#a39e93">${timeLabel}</div>` +
+        row("開 Open", fmtPrice(open)) +
+        row("高 High", fmtPrice(high)) +
+        row("低 Low", fmtPrice(low)) +
+        row("收 Close", fmtPrice(close), changeColor) +
+        `<div style="margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.1);display:flex;justify-content:space-between;gap:12px">` +
+        `<span style="color:#a39e93">升跌%</span>` +
+        `<span style="color:${changeColor};font-weight:600">${changeText}</span></div>`
+
+      tooltipEl.style.display = "block"
+      const width = tooltipEl.offsetWidth || 148
+      const height = tooltipEl.offsetHeight || 120
+      const hostWidth = element.clientWidth
+      const hostHeight = element.clientHeight
+      let left = param.point.x + 16
+      let top = param.point.y + 16
+      if (left + width > hostWidth - 8) left = param.point.x - width - 16
+      if (top + height > hostHeight - 8) top = param.point.y - height - 16
+      if (left < 8) left = 8
+      if (top < 8) top = 8
+
+      tooltipEl.style.left = `${left}px`
+      tooltipEl.style.top = `${top}px`
+    }
+
+    chart.subscribeCrosshairMove(onCrosshairMove)
+
+    return () => {
+      chart.unsubscribeCrosshairMove(onCrosshairMove)
+      chart.remove()
+    }
   }, [bars, index, interval, levels, sma10, sma20, sma50, sma150, sma200])
 
-  return <div ref={host} className="h-[520px] w-full sm:h-[680px]" />
+  return (
+    <div className="relative h-[520px] w-full sm:h-[680px]">
+      <div ref={host} className="h-full w-full" />
+      <div
+        ref={tooltipRef}
+        className="pointer-events-none absolute z-20 hidden min-w-[148px] rounded-md border border-white/15 bg-[#1a1f1c]/95 px-2.5 py-2 font-mono text-[11px] leading-relaxed text-[#d9d2c5] shadow-lg backdrop-blur-sm"
+      />
+    </div>
+  )
 }
 
 
@@ -287,6 +393,31 @@ function applyDefaultVisibleRange(
   } catch {
     chart.timeScale().fitContent()
   }
+}
+
+
+function fmtPrice(value: number): string {
+  if (!Number.isFinite(value)) return "—"
+  const abs = Math.abs(value)
+  const digits = abs >= 1000 ? 2 : abs >= 100 ? 2 : abs >= 1 ? 2 : 4
+  return value.toFixed(digits)
+}
+
+function formatTooltipTime(time: ChartTime, interval: ChartInterval): string {
+  if (typeof time === "number") {
+    const d = new Date(time * 1000)
+    const y = d.getUTCFullYear()
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0")
+    const day = String(d.getUTCDate()).padStart(2, "0")
+    if (interval === "1h") {
+      const hh = String(d.getUTCHours()).padStart(2, "0")
+      const mm = String(d.getUTCMinutes()).padStart(2, "0")
+      return `${y}-${m}-${day} ${hh}:${mm}`
+    }
+    return `${y}-${m}-${day}`
+  }
+  if (interval === "1h" && time.length > 10) return time.replace("T", " ").slice(0, 16)
+  return time.slice(0, 10)
 }
 
 function toChartTime(time: ChartTime): Time {
