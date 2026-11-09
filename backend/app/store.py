@@ -153,12 +153,29 @@ def load_snapshot(market: str = "us") -> dict | None:
 
 
 def load_chart(symbol: str, market: str = "us") -> list[dict] | None:
+    found = load_charts([symbol], market=market)
+    return found.get(symbol)
+
+
+def load_charts(symbols: list[str], market: str = "us") -> dict[str, list[dict]]:
+    """Load daily bars for the given symbols. Missing symbols are omitted."""
+    if not symbols:
+        return {}
     init_db(market)
+    found: dict[str, list[dict]] = {}
+    # Stay under SQLite's default bound-variable limit.
+    chunk_size = 400
     with _connect(market) as conn:
-        row = conn.execute("SELECT payload FROM charts WHERE symbol = ?", (symbol,)).fetchone()
-    if row is None:
-        return None
-    return _unpack(row["payload"])
+        for start in range(0, len(symbols), chunk_size):
+            chunk = symbols[start : start + chunk_size]
+            placeholders = ",".join("?" for _ in chunk)
+            rows = conn.execute(
+                f"SELECT symbol, payload FROM charts WHERE symbol IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            for row in rows:
+                found[row["symbol"]] = _unpack(row["payload"])
+    return found
 
 
 def save_chart(symbol: str, bars: list[dict], market: str = "us") -> None:

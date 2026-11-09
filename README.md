@@ -43,7 +43,7 @@ docker compose up --build
 
 | 變數 | 預設 | 作用 |
 | --- | --- | --- |
-| `KAI_LUT_TTL_HOURS` | `12` | 快取過期前不自動全量更新 |
+| `KAI_LUT_TTL_HOURS` | `12` | 逾時把快取標為 stale。冷啟動不會因此自動全量更新 |
 | `KAI_LUT_CACHE` | `backend/cache` | SQLite 目錄 |
 | `KAI_LUT_WORKERS` | `10` | 下載日線的並行數 |
 | `KAI_LUT_CHUNK` | `250` | 全量更新每批符號數（避免一次載入過多） |

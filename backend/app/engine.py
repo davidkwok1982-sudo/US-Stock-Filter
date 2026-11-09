@@ -29,6 +29,33 @@ SYMBOL_RE = US_SYMBOL_RE  # backward-compatible alias
 FUNDAMENTAL_TTL = timedelta(days=7)
 
 
+def session_date_of(value) -> str | None:
+    """Return YYYY-MM-DD from a daily bar time, or None when it is not a session date."""
+    if not isinstance(value, str) or len(value) < 10:
+        return None
+    day = value[:10]
+    if day[4] != "-" or day[7] != "-":
+        return None
+    return day
+
+
+def chart_covers_session(bars: list[dict] | None, session_date: str | None) -> bool:
+    """True when cached daily bars already include the benchmark's latest session.
+
+    ``session_date`` is that benchmark bar (snapshot ``marketDate``): SPY for the
+    US book, ``^HSI`` for HK. Both series are stored as YYYY-MM-DD by the same
+    parser, so the last bar date >= that session is fresh enough for Stage 2.
+    Quotes are still refreshed; this only skips the Yahoo chart download.
+    """
+    expected = session_date_of(session_date)
+    if expected is None or not bars:
+        return False
+    last = session_date_of(bars[-1].get("time"))
+    if last is None:
+        return False
+    return last >= expected
+
+
 class Engine:
     def __init__(self, market: MarketConfig | None = None) -> None:
         self.market = market or US_MARKET
@@ -112,6 +139,12 @@ class Engine:
         rows: list[dict] = []
         chart_ok = 0
         quote_ok = 0
+        chart_reused = 0
+        chart_fetched = 0
+        # marketDate is the benchmark's latest daily bar. A stored series whose
+        # last bar is on or after that session is reused; only missing or older
+        # charts are downloaded. Quotes are always refreshed.
+        session_date = session_date_of(spy_bars[-1].get("time"))
         chunk = max(50, CHUNK_SIZE)
         batches = (total + chunk - 1) // chunk if total else 1
 
@@ -120,29 +153,60 @@ class Engine:
             batch_symbols = [item["symbol"] for item in batch]
             done_before = batch_index
             batch_no = batch_index // chunk + 1
-            self._set(
-                progress=min(88, 8 + int(80 * done_before / max(total, 1))),
-                message=f"分批下載日線 {done_before}/{total}（第 {batch_no}/{batches} 批）",
-            )
+            stored = store.load_charts(batch_symbols, market=self.mid)
+            fresh: dict[str, list[dict]] = {}
+            stale_symbols: list[str] = []
+            for symbol in batch_symbols:
+                cached = stored.get(symbol)
+                if cached and chart_covers_session(cached, session_date):
+                    fresh[symbol] = cached
+                else:
+                    stale_symbols.append(symbol)
 
-            counter = {"n": 0}
-            counter_lock = threading.Lock()
+            fetched: dict[str, list[dict]] = {}
+            if stale_symbols:
+                stale_total = len(stale_symbols)
+                self._set(
+                    progress=min(88, 8 + int(80 * done_before / max(total, 1))),
+                    message=(
+                        f"第 {batch_no}/{batches} 批：沿用本機日線 {len(fresh)} 隻，"
+                        f"下載 {stale_total} 隻（{done_before}/{total}）"
+                    ),
+                )
+                counter = {"n": 0}
+                counter_lock = threading.Lock()
 
-            def on_each(_symbol: str, _ok: bool) -> None:
-                with counter_lock:
-                    counter["n"] += 1
-                    local_done = counter["n"]
-                absolute = done_before + local_done
-                if local_done == len(batch_symbols) or local_done % 25 == 0:
-                    progress = 8 + int(80 * absolute / max(total, 1))
-                    self._set(
-                        progress=min(88, progress),
-                        message=f"正在下載日線 {absolute}/{total}",
-                    )
+                def on_each(_symbol: str, _ok: bool) -> None:
+                    with counter_lock:
+                        counter["n"] += 1
+                        local_done = counter["n"]
+                    covered = done_before + int(len(batch_symbols) * local_done / stale_total)
+                    if local_done == stale_total or local_done % 25 == 0:
+                        progress = 8 + int(80 * covered / max(total, 1))
+                        self._set(
+                            progress=min(88, progress),
+                            message=(
+                                f"正在下載日線 {local_done}/{stale_total}"
+                                f"（本批沿用 {len(fresh)}，全池 {min(covered, total)}/{total}）"
+                            ),
+                        )
 
-            charts = client.charts(batch_symbols, workers=WORKERS, on_each=on_each)
-            chart_ok += sum(1 for symbol in batch_symbols if symbol in charts)
-            store.upsert_charts(charts, market=self.mid)
+                fetched = client.charts(stale_symbols, workers=WORKERS, on_each=on_each)
+            else:
+                absolute = done_before + len(batch_symbols)
+                self._set(
+                    progress=min(88, 8 + int(80 * absolute / max(total, 1))),
+                    message=f"本機日線已涵蓋 {session_date or '最新交易日'}（{absolute}/{total}）",
+                )
+
+            # Failed refetches keep the previous bars so a chart blip does not
+            # blank a symbol that already has history. Fresh downloads replace them.
+            merged = dict(stored)
+            merged.update(fetched)
+            chart_reused += len(fresh)
+            chart_fetched += sum(1 for symbol in stale_symbols if symbol in fetched)
+            chart_ok += sum(1 for symbol in batch_symbols if merged.get(symbol))
+            store.upsert_charts(fetched, market=self.mid)
 
             self._set(
                 progress=min(90, 8 + int(80 * (done_before + len(batch_symbols)) / max(total, 1))),
@@ -157,7 +221,7 @@ class Engine:
                 rows.append(
                     evaluate(
                         base,
-                        charts.get(item["symbol"]),
+                        merged.get(item["symbol"]),
                         quote,
                         spy_bars,
                         **self._eval_kwargs(),
@@ -174,11 +238,13 @@ class Engine:
                     source=source,
                     universe_size=total,
                     chart_failures=len(symbols) - chart_ok,
+                    chart_reused=chart_reused,
+                    chart_fetched=chart_fetched,
                     partial=batch_index + len(batch) < total,
                 )
                 store.save_snapshot(snapshot, market=self.mid)
-            # Free batch charts from memory.
-            del charts
+            # Free this batch's bars before the next chunk.
+            del stored, fresh, fetched, merged
 
         if chart_ok < 0.4 * total:
             raise RuntimeError(f"日線下載不完整（{chart_ok}/{total}），未覆寫快取")
@@ -204,6 +270,8 @@ class Engine:
             source=source,
             universe_size=total,
             chart_failures=len(symbols) - chart_ok,
+            chart_reused=chart_reused,
+            chart_fetched=chart_fetched,
             partial=False,
         )
         criteria = snapshot["meta"].setdefault("criteria", {})
@@ -212,10 +280,13 @@ class Engine:
         store.prune_charts(set(symbols) | {self.market.benchmark}, market=self.mid)
         summary = snapshot["meta"]["summary"]
         log.info(
-            "refresh done universe=%s pass=%s failures=%s",
+            "refresh done universe=%s pass=%s failures=%s charts_reused=%s charts_fetched=%s session=%s",
             len(rows),
             summary["pass"],
             len(symbols) - chart_ok,
+            chart_reused,
+            chart_fetched,
+            session_date,
         )
 
     def _build_snapshot(
@@ -227,6 +298,8 @@ class Engine:
         universe_size: int,
         chart_failures: int,
         partial: bool,
+        chart_reused: int = 0,
+        chart_fetched: int = 0,
     ) -> dict:
         summary = summarize(rows)
         now = datetime.now(timezone.utc).isoformat()
@@ -253,6 +326,8 @@ class Engine:
                 "marketCapNote": self.market.market_cap_note,
                 "ttlHours": TTL_HOURS,
                 "chartFailures": chart_failures,
+                "chartReused": chart_reused,
+                "chartFetched": chart_fetched,
                 "criteria": {
                     "minMarketCap": self.market.min_market_cap,
                     "marketCapCurrency": self.market.market_cap_currency,

@@ -51,9 +51,9 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         if (stop) return
         setData(next)
         setLoadError(null)
-        // Keep polling while a refresh is running. US cold boot also auto-starts refresh.
-        // HK cold boot waits for manual refresh — stop hammering once we know it is idle.
-        if (next.refresh.running || (!next.ready && market === "us")) {
+        // Poll only while a refresh is running. Empty US and HK caches wait for
+        // the manual 重新整理 button instead of spinning on an auto full refresh.
+        if (next.refresh.running) {
           timer = window.setTimeout(() => void tick(), 2500)
         }
       } catch (error) {

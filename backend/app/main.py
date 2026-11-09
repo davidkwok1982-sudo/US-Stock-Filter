@@ -26,13 +26,10 @@ def _boot_market(market: str) -> None:
     eng = engines[market]
     snapshot = store.load_snapshot(market)
     if snapshot is None or store.is_stale(snapshot):
-        # Hobby / ephemeral: do not auto-start a full multi-thousand-symbol
-        # refresh for HK on every cold boot — US keeps prior behaviour.
-        if market == "us":
-            log.info("US cache missing or stale; starting refresh")
-            eng.start()
-        else:
-            log.info("HK cache missing or stale; waiting for manual /api/hk/refresh")
+        # Hobby / ephemeral disk: do not auto-start a full refresh on cold boot
+        # for either market. An empty cache shows 「請按重新整理」; a stale cache
+        # stays on screen until the user presses 重新整理.
+        log.info("%s cache missing or stale; waiting for manual refresh", market)
     elif eng._needs_industry_backfill(snapshot):
         log.info("%s screen cache missing industry labels; starting backfill", market)
         eng.start_industry_backfill()
@@ -112,7 +109,16 @@ def screen(
     # Miss / empty after deploy / first request: load + backfill, then rebuild cache.
     snapshot = engine.prepare_snapshot()
     if snapshot is None:
-        return {"ready": False, "stale": False, "meta": None, "rows": [], "refresh": refresh}
+        return {
+            "ready": False,
+            "stale": False,
+            "meta": {
+                "market": "us",
+                "hint": "美股快取尚未建立。請按「重新整理」建立股票池。",
+            },
+            "rows": [],
+            "refresh": refresh,
+        }
     stale = store.is_stale(snapshot)
     return screen_cache.response(
         snapshot=snapshot,

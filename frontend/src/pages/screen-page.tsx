@@ -104,7 +104,7 @@ export function ScreenPage() {
           title={copy.title}
           hint={data?.meta?.hint ?? (market === "hk"
             ? "港股快取尚未建立。Hobby 部署為臨時磁碟，請先按「重新整理」建立股票池。"
-            : "尚未有快取，請重新整理。")}
+            : "美股快取尚未建立。請按「重新整理」建立股票池。")}
           onRefresh={() => void refresh()}
           refreshing={refreshing}
         />
